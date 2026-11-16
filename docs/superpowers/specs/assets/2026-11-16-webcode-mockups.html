@@ -1,0 +1,195 @@
+<style>
+.wc{--bg:#1b1b1d;--surface:#26272a;--surface2:#2f3034;--line:#3a3b3f;--text:#e3e3e3;--muted:#a6a8ab;--blue:#8ab4f8;--blue-ink:#0b2a5c;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);border-radius:10px;overflow:hidden;font-size:13px;border:1px solid var(--line)}
+.wc *{box-sizing:border-box}
+.wc .top>span{white-space:nowrap}.wc .top{display:flex;align-items:center;gap:12px;padding:10px 16px;height:56px}
+.wc .logo{width:28px;height:34px;border-radius:4px;background:var(--blue);color:var(--blue-ink);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;font-family:ui-monospace,Menlo,monospace;position:relative}
+.wc .brand{font-size:20px;color:var(--text)}
+.wc .search{flex:1;max-width:640px;margin:0 auto;background:var(--surface2);border-radius:24px;padding:11px 18px;color:var(--muted)}
+.wc .av{flex-shrink:0;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#111;border:2px solid var(--bg)}
+.wc .icon{color:var(--muted);font-size:16px;width:24px;text-align:center}
+.wc .band{background:var(--surface);padding:16px 0 22px}
+.wc .inner{max-width:820px;margin:0 auto;padding:0 12px}
+.wc .row-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;color:var(--text);font-size:14px}
+.wc .tpls{display:flex;gap:16px}
+.wc .tpl .thumb{width:118px;height:150px;border-radius:6px;border:1px solid var(--line);background:#141416;display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:8px;text-align:left}
+.wc .tpl .thumb.blank{font-size:46px;color:var(--blue);font-family:inherit}
+.wc .tpl .thumb:hover{border-color:var(--blue)}
+.wc .tpl .nm{margin-top:8px;font-size:13px}
+.wc .tpl .sub{font-size:11px;color:var(--muted)}
+.wc .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding-bottom:24px}
+.wc .card{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.wc .card .prev{height:120px;background:#141416;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:9.5px;line-height:1.45;color:#9aa0a6;overflow:hidden;border-bottom:1px solid var(--line)}
+.wc .card .meta{padding:10px 12px}
+.wc .card .t{font-size:13px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc .card .s{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
+.wc .live{display:inline-flex;align-items:center;gap:4px;color:#81c995;font-size:11px}
+.wc .dot{width:7px;height:7px;border-radius:50%;background:#81c995;display:inline-block}
+.wc .k{color:#c58af9}.wc .f{color:#8ab4f8}.wc .str{color:#81c995}.wc .c{color:#6f7378}
+.wc .tag{width:16px;height:20px;border-radius:2px;background:var(--blue);display:inline-block}
+/* workspace */
+.wc .title-row{display:flex;align-items:center;gap:10px;padding:8px 14px 0}
+.wc .ptitle{white-space:nowrap;font-size:18px}
+.wc .menus{display:flex;gap:14px;color:var(--text);font-size:13px;padding:2px 0 0}
+.wc .saved{color:var(--muted);font-size:12px}
+.wc .share{white-space:nowrap;flex-shrink:0;background:var(--blue);color:var(--blue-ink);border-radius:20px;padding:9px 18px;font-weight:600;display:inline-flex;gap:6px;align-items:center}
+.wc .toolbar{margin:8px 12px;background:var(--surface);border-radius:24px;padding:7px 14px;display:flex;gap:14px;align-items:center;color:var(--muted)}
+.wc .toolbar .sep{width:1px;height:18px;background:var(--line)}
+.wc .tb-btn{color:var(--text)}
+.wc .run{color:#81c995;font-weight:600}
+.wc .body{display:flex;height:330px;border-top:1px solid var(--line)}
+.wc .explorer{width:180px;border-right:1px solid var(--line);padding:10px 8px;color:var(--muted);font-size:12px;line-height:1.9;background:var(--bg)}
+.wc .explorer .on{background:#33415a;color:var(--text);border-radius:12px;padding:0 8px;margin:0 -8px}
+.wc .explorer .who{float:right;width:8px;height:8px;border-radius:50%;margin-top:8px}
+.wc .center{flex:1;display:flex;flex-direction:column;min-width:0}
+.wc .tabs{display:flex;background:var(--bg);border-bottom:1px solid var(--line);font-size:12px}
+.wc .tab{padding:8px 14px;color:var(--muted);border-right:1px solid var(--line)}
+.wc .tab.on{color:var(--text);background:var(--surface);box-shadow:inset 0 2px 0 var(--blue)}
+.wc .code div{white-space:nowrap}.wc .code{overflow:hidden;flex:1;background:var(--surface);font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.7;padding:8px 0;position:relative}
+.wc .ln{display:inline-block;width:38px;text-align:right;padding-right:14px;color:#5f6368}
+.wc .cur{display:inline-block;width:2px;height:15px;vertical-align:middle;position:relative}
+.wc .flag{position:absolute;top:-15px;left:0;font-size:10px;padding:0 4px;border-radius:3px 3px 3px 0;color:#111;font-family:-apple-system,Roboto,sans-serif;white-space:nowrap}
+.wc .sel{background:rgba(242,139,130,.25)}
+.wc .term{height:110px;background:#141416;border-top:1px solid var(--line);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;padding:6px 12px;line-height:1.6;color:#bdc1c6}
+.wc .term .th{font-family:-apple-system,Roboto,sans-serif;color:var(--muted);font-size:11px;margin-bottom:2px}
+.wc .preview{width:200px;border-left:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column}
+.wc .preview .bar{padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
+.wc .preview .page{flex:1;margin:10px;border-radius:6px;background:#f1f3f4;color:#202124;padding:10px;font-size:11px}
+.wc .rail{width:44px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:12px;color:var(--muted);font-size:15px}
+.wc .rail .a{color:var(--blue)}
+</style>
+
+<h2>Webcode, dark Docs-style</h2>
+<p class="subtitle">Screen 1 is the home page. Screen 2 has two choices for the project workspace. Click the one you like, then reply in chat.</p>
+
+<h3>1. Home</h3>
+<div class="wc">
+  <div class="top">
+    <span class="icon">☰</span>
+    <span class="logo">&lt;/&gt;</span><span class="brand">Webcode</span>
+    <div class="search">🔍&nbsp; Search projects</div>
+    <span class="icon">⋮⋮</span>
+    <span class="av" style="background:#8ab4f8">C</span>
+  </div>
+  <div class="band">
+    <div class="inner">
+      <div class="row-h"><span>Start a new project</span><span class="saved">Template gallery ⇕ &nbsp;⋮</span></div>
+      <div class="tpls">
+        <div class="tpl"><div class="thumb blank">+</div><div class="nm">Blank</div><div class="sub">&nbsp;</div></div>
+        <div class="tpl"><div class="thumb"><div><span class="k">import</span> React<br><span class="k">export</span> <span class="k">default</span><br>&nbsp;<span class="f">App</span>()<br><span class="c">// vite</span></div></div><div class="nm">React app</div><div class="sub">Vite + TypeScript</div></div>
+        <div class="tpl"><div class="thumb"><div>app.<span class="f">get</span>(<span class="str">'/'</span>,<br>&nbsp;(req, res)<br>&nbsp;=&gt; ...)</div></div><div class="nm">Node API</div><div class="sub">Express</div></div>
+        <div class="tpl"><div class="thumb"><div><span class="k">export</span> <span class="k">function</span><br>&nbsp;<span class="f">slugify</span>()<br><span class="c">// vitest</span></div></div><div class="nm">TS library</div><div class="sub">with tests</div></div>
+        <div class="tpl"><div class="thumb" style="font-family:inherit;font-size:28px;color:var(--muted)">⤓</div><div class="nm">Import</div><div class="sub">from GitHub</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="inner" style="padding-top:18px">
+    <div class="row-h"><span>Recent projects</span><span class="saved">Owned by anyone ▾ &nbsp;&nbsp; ▦ &nbsp; A↕ &nbsp; 🗀</span></div>
+    <div class="grid">
+      <div class="card"><div class="prev"><span class="k">import</span> { describe } <span class="k">from</span> <span class="str">'vitest'</span><br><span class="f">describe</span>(<span class="str">'todos'</span>, () =&gt; {<br>&nbsp;&nbsp;<span class="f">it</span>(<span class="str">'adds a todo'</span>...</div><div class="meta"><div class="t">todo-api</div><div class="s"><span class="tag"></span><span class="live"><span class="dot"></span>2 here now</span></div></div></div>
+      <div class="card"><div class="prev"><span class="k">export</span> <span class="k">function</span> <span class="f">Board</span>() {<br>&nbsp;&nbsp;<span class="k">const</span> [cells] = <span class="f">useState</span><br>&nbsp;&nbsp;<span class="k">return</span> &lt;<span class="f">Grid</span> /&gt;</div><div class="meta"><div class="t">tic-tac-toe</div><div class="s"><span class="tag"></span>Opened 2:14 PM</div></div></div>
+      <div class="card"><div class="prev"><span class="c"># weather-cli</span><br><span class="k">const</span> res = <span class="k">await</span> <span class="f">fetch</span>(url)<br>console.<span class="f">log</span>(temp)</div><div class="meta"><div class="t">weather-cli</div><div class="s"><span class="tag"></span>👥 Shared · Nov 12</div></div></div>
+      <div class="card"><div class="prev"><span class="k">export</span> <span class="k">const</span> <span class="f">slugify</span> =<br>&nbsp;&nbsp;(s: string) =&gt;<br>&nbsp;&nbsp;s.<span class="f">toLowerCase</span>()</div><div class="meta"><div class="t">slugify</div><div class="s"><span class="tag"></span>Nov 3, 2026</div></div></div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:32px">2. Project workspace: pick one</h3>
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Docs-faithful</h3>
+      <p>Title, menu row, and a rounded toolbar across the top, like a Doc. Files on the left, terminal underneath. Feels most like Google Docs, but leaves less height for code.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Slim header + preview</h3>
+      <p>Same Docs title and Share button, but menus and run buttons fit on one row. An icon rail on the left and a live app preview on the right. More room for code. Still clearly Docs, but less literal.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:16px">
+<div>
+<p class="label">A · Docs-faithful</p>
+<div class="wc">
+  <div class="title-row">
+    <span class="logo">&lt;/&gt;</span>
+    <div style="flex:1">
+      <div style="display:flex;gap:10px;align-items:center"><span class="ptitle">todo-api</span><span class="icon">☆</span><span class="icon">🗀</span><span class="saved">☁ Saved</span></div>
+      <div class="menus"><span>File</span><span>Edit</span><span>View</span><span>Run</span><span>Terminal</span><span>Agents</span><span>Help</span></div>
+    </div>
+    <span><span class="av" style="background:#f28b82">J</span><span class="av" style="background:#81c995;margin-left:-8px">M</span></span>
+    <span class="icon">💬</span>
+    <span class="share">🔒 Share</span>
+    <span class="av" style="background:#8ab4f8">C</span>
+  </div>
+  <div class="toolbar">
+    <span class="tb-btn">↶</span><span class="tb-btn">↷</span><span class="sep"></span>
+    <span class="run">▶ Run</span><span class="tb-btn">✓ Test</span><span class="sep"></span>
+    <span class="tb-btn">Format</span><span class="tb-btn">TypeScript ▾</span><span class="sep"></span>
+    <span class="tb-btn">🔍</span><span style="margin-left:auto" class="saved">Editing ▾</span>
+  </div>
+  <div class="body">
+    <div class="explorer">
+      ▾ src<br>
+      &nbsp;&nbsp;<span class="on">todos.ts <span class="who" style="background:#f28b82"></span></span><br>
+      &nbsp;&nbsp;server.ts<br>
+      ▾ test<br>
+      &nbsp;&nbsp;todos.test.ts <span class="who" style="background:#81c995"></span><br>
+      package.json<br>README.md
+    </div>
+    <div class="center">
+      <div class="tabs"><span class="tab on">todos.ts</span><span class="tab">server.ts</span></div>
+      <div class="code">
+        <div><span class="ln">1</span><span class="k">export</span> <span class="k">type</span> <span class="f">Todo</span> = { id: <span class="f">number</span>; done: <span class="f">boolean</span> }</div>
+        <div><span class="ln">2</span></div>
+        <div><span class="ln">3</span><span class="k">export</span> <span class="k">function</span> <span class="f">addTodo</span>(list: Todo[], <span class="sel">title: string</span><span class="cur" style="background:#f28b82"><span class="flag" style="background:#f28b82">Jess</span></span>) {</div>
+        <div><span class="ln">4</span>&nbsp;&nbsp;<span class="k">return</span> [...list, { id: list.length + <span class="str">1</span>, title, done: <span class="k">false</span> }]</div>
+        <div><span class="ln">5</span>}<span class="cur" style="background:#8ab4f8"></span></div>
+      </div>
+      <div class="term"><div class="th">TERMINAL · your browser</div>$ npm test<br><span style="color:#81c995">✓</span> test/todos.test.ts (3)<br><span style="color:#81c995">Tests 3 passed</span> (3)</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div style="margin-top:28px">
+<p class="label">B · Slim header + preview</p>
+<div class="wc">
+  <div class="top" style="height:52px;padding:8px 12px;gap:10px">
+    <span class="logo">&lt;/&gt;</span>
+    <span class="ptitle">todo-api</span><span class="icon">☆</span>
+    <div class="menus" style="padding:0 0 0 6px"><span>File</span><span>Edit</span><span>View</span><span>Run</span><span>Agents</span></div>
+    <span class="run" style="margin-left:auto">▶ Run</span><span class="tb-btn">✓ Test</span>
+    <span><span class="av" style="background:#f28b82">J</span><span class="av" style="background:#81c995;margin-left:-8px">M</span></span>
+    <span class="share">🔒 Share</span>
+  </div>
+  <div class="body" style="height:376px">
+    <div class="rail"><span class="a">🗀</span><span>🔍</span><span>👥</span><span>✦</span></div>
+    <div class="explorer" style="width:140px">
+      ▾ src<br>
+      &nbsp;&nbsp;<span class="on">todos.ts <span class="who" style="background:#f28b82"></span></span><br>
+      &nbsp;&nbsp;server.ts<br>
+      ▾ test<br>
+      &nbsp;&nbsp;todos.test.ts <span class="who" style="background:#81c995"></span><br>
+      package.json
+    </div>
+    <div class="center">
+      <div class="tabs"><span class="tab on">todos.ts</span><span class="tab">server.ts</span></div>
+      <div class="code">
+        <div><span class="ln">1</span><span class="k">export</span> <span class="k">type</span> <span class="f">Todo</span> = { ... }</div>
+        <div><span class="ln">2</span></div>
+        <div><span class="ln">3</span><span class="k">export</span> <span class="k">function</span> <span class="f">addTodo</span>(</div>
+        <div><span class="ln">4</span>&nbsp;&nbsp;list: Todo[], <span class="sel">title</span><span class="cur" style="background:#f28b82"><span class="flag" style="background:#f28b82">Jess</span></span></div>
+        <div><span class="ln">5</span>) {<span class="cur" style="background:#8ab4f8"></span></div>
+      </div>
+      <div class="term"><div class="th">TERMINAL · your browser</div>$ npm test<br><span style="color:#81c995">Tests 3 passed</span> (3)</div>
+    </div>
+    <div class="preview"><div class="bar">Preview · localhost:3000</div><div class="page"><b>Todos</b><br>☐ Buy milk<br>☑ Ship v1</div></div>
+  </div>
+</div>
+</div>
+</div>
