@@ -125,13 +125,11 @@ describe.skipIf(!TEST_DB_URL)(`demo (${TEST_DB_URL ? 'postgres' : dbSkipReason})
     expect((await listForUser(sql, alice.id, 'mine', 'opened')).map(r => r.id)).toContain(id)
   })
 
-  test('claim by another guest fails; second claim fails; expired fails', async () => {
+  test('claim by another guest fails; second claim fails; old but active copy can be claimed', async () => {
     const id = await mkCopy('g1')
     const alice = await mkUser(2)
     expect(await claimProject(sql, id, 'g2', alice.id)).toBe(false)
-    await sql`update projects set expires_at = now() - interval '1 minute' where id = ${id}`
-    expect(await claimProject(sql, id, 'g1', alice.id)).toBe(false)
-    await sql`update projects set expires_at = now() + interval '1 hour' where id = ${id}`
+    await sql`update projects set created_at = now() - interval '30 hours', expires_at = now() - interval '6 hours' where id = ${id}`
     expect(await claimProject(sql, id, 'g1', alice.id)).toBe(true)
     expect(await claimProject(sql, id, 'g1', alice.id)).toBe(false)
   })

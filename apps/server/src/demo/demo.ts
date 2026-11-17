@@ -29,16 +29,15 @@ export async function createDemoCopy(deps: { sql: Sql; now?: () => Date }, guest
   })
 }
 
-/** Turns a guest's unexpired demo copy into a normal project owned by the user. */
+/** Turns a guest's demo copy (any still existing; cleanup removes idle ones) into a normal project owned by the user. */
 export async function claimProject(
-  sql: Sql, projectId: string, guestId: string, userId: string, now: Date = new Date(),
+  sql: Sql, projectId: string, guestId: string, userId: string,
 ): Promise<boolean> {
   return sql.begin(async tx => {
     const rows = await tx`
       update projects
       set owner_id = ${userId}, owner_guest_id = null, is_demo_copy = false, expires_at = null, updated_at = now()
       where id = ${projectId} and owner_guest_id = ${guestId}
-        and (expires_at is null or expires_at > ${now})
       returning id`
     if (rows.length === 0) return false
     await touchMember(tx as unknown as Sql, projectId, userId)
@@ -66,7 +65,7 @@ export function claimOnSignIn(deps: { sql: Sql; now?: () => Date }) {
     try {
       const m = e.guest && e.next ? /^\/p\/([A-Za-z0-9_-]+)\/?(?:[?#].*)?$/.exec(e.next) : null
       if (!e.guest || !m) return
-      await claimProject(deps.sql, m[1]!, e.guest.guestId, e.userId, deps.now?.())
+      await claimProject(deps.sql, m[1]!, e.guest.guestId, e.userId)
     } catch (err) {
       console.error('[demo] claim on sign-in failed:', err instanceof Error ? err.message : 'unknown error')
     }
