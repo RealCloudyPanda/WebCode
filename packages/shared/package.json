@@ -9,5 +9,8 @@
     "build": "tsc --noEmit",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yjs": "^13.6.33"
   }
 }

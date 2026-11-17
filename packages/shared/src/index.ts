@@ -3,3 +3,6 @@ export * from './limits';
 export * from './paths';
 export * from './ids';
 export * from './colors';
+export * from './access';
+export * from './projectDoc';
+export * from './api-types';
