@@ -78,7 +78,7 @@ test('non-JSON body on /api is 415; empty body allowed', async () => {
   const r = await post('/api/projects', { origin: okOrigin, 'content-type': 'text/plain' }, 'hi')
   expect(r.status).toBe(415)
   expect(await r.json()).toEqual({ error: 'unsupported-media-type' })
-  expect((await post('/api/demo', { origin: okOrigin })).status).toBe(404)
+  expect((await post('/api/nope', { origin: okOrigin })).status).toBe(404)
 })
 
 test('GET is not origin checked', async () => {

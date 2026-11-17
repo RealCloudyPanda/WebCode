@@ -8,6 +8,8 @@ import type { CollabHub } from '../collab/types.js'
 import type { RateLimiter } from '../util/rate-limit.js'
 import { authRoutes } from './routes/auth.js'
 import { avatarRoutes } from './routes/avatar.js'
+import { demoRoutes } from './routes/demo.js'
+import { claimOnSignIn } from '../demo/demo.js'
 import { projectRoutes } from './routes/projects.js'
 import { templateRoutes } from './routes/templates.js'
 import { isolationHeaders, originCheck, requireJson } from './security.js'
@@ -46,6 +48,11 @@ async function readFileIfExists(path: string): Promise<Buffer | null> {
 
 export function createApp(deps: Deps): Hono {
   const { config } = deps
+  const claim = claimOnSignIn(deps)
+  const onSignedIn: NonNullable<Deps['onSignedIn']> = async e => {
+    await claim(e)
+    await deps.onSignedIn?.(e)
+  }
   const app = new Hono()
 
   app.use('*', isolationHeaders())
@@ -54,10 +61,11 @@ export function createApp(deps: Deps): Hono {
   app.use('/api/*', requireJson())
 
   app.get('/api/health', c => c.json({ ok: true }))
-  app.route('/', authRoutes(deps))
+  app.route('/', authRoutes({ ...deps, onSignedIn }))
   app.route('/', avatarRoutes(deps))
   app.route('/', templateRoutes())
   app.route('/', projectRoutes(deps))
+  app.route('/', demoRoutes(deps))
 
   app.all('/api/*', c => c.json({ error: 'not-found' }, 404))
   app.all('/auth/*', c => c.json({ error: 'not-found' }, 404))
