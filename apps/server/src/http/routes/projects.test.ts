@@ -6,7 +6,11 @@ import { loadConfig } from '../../config.js'
 import { createApp } from '../app.js'
 import { RateLimiter } from '../../util/rate-limit.js'
 import { createNoopCollab, type CollabHub } from '../../collab/types.js'
-import type { GithubClient } from '../../auth/github.js'
+import { GithubNotFound, type GithubClient } from '../../auth/github.js'
+import { gzipSync } from 'node:zlib'
+import tar from 'tar-stream'
+import * as Y from 'yjs'
+import { docToFiles } from '@webcode/shared'
 import { signGuest } from '../../auth/guest.js'
 import { createSession } from '../../db/sessions.js'
 import { upsertGithubUser } from '../../db/users.js'
@@ -105,9 +109,49 @@ describe.skipIf(!TEST_DB_URL)(`projects routes (${TEST_DB_URL ? 'postgres' : dbS
   test('invalid body and importUrl', async () => {
     expect((await postJson('/api/projects', { template: 'nope' }, alice)).status).toBe(400)
     expect((await postJson('/api/projects', {}, alice)).status).toBe(400)
-    const r = await postJson('/api/projects', { importUrl: 'https://github.com/a/b' }, alice)
-    expect(r.status).toBe(501)
-    expect(await r.json()).toEqual({ error: 'not-implemented' })
+    const r = await postJson('/api/projects', { importUrl: 'nope' }, alice)
+    expect(r.status).toBe(400)
+    expect(await r.json()).toEqual({ error: 'invalid', message: 'Enter a GitHub repo like owner/repo' })
+  })
+
+  test('import creates a project from the repo tarball', async () => {
+    const pack = tar.pack()
+    const chunks: Buffer[] = []
+    pack.on('data', c => chunks.push(c as Buffer))
+    const ended = new Promise<void>(res => pack.on('end', () => res()))
+    pack.entry({ name: 'app-abc123/src/a.ts' }, 'export const a = 1')
+    pack.entry({ name: 'app-abc123/README.md' }, '# hi')
+    pack.entry({ name: 'app-abc123/node_modules/x.js' }, 'x')
+    pack.finalize()
+    await ended
+    const calls: unknown[][] = []
+    ;(github as any).downloadTarball = async (...a: unknown[]) => { calls.push(a); return new Uint8Array(gzipSync(Buffer.concat(chunks))) }
+    const r = await postJson('/api/projects', { importUrl: 'https://github.com/octo/app/tree/dev' }, alice)
+    expect(r.status).toBe(200)
+    expect(calls).toEqual([['octo', 'app', 'dev']])
+    const { id } = await r.json() as { id: string }
+    const d = await getJson(`/api/projects/${id}`, alice)
+    expect(d.title).toBe('app')
+    expect(d.linkAccess).toBe('restricted')
+    const state = await loadDoc(sql, id)
+    const ydoc = new Y.Doc()
+    Y.applyUpdate(ydoc, state!)
+    expect(docToFiles(ydoc)).toEqual({ 'src/a.ts': 'export const a = 1', 'README.md': '# hi' })
+    const [row] = await sql`select template from projects where id = ${id}`
+    expect(row!.template).toBe('import')
+  })
+
+  test('import maps 404 to a friendly 400', async () => {
+    ;(github as any).downloadTarball = async () => { throw new GithubNotFound() }
+    const r = await postJson('/api/projects', { importUrl: 'octo/private' }, alice)
+    expect(r.status).toBe(400)
+    expect(await r.json()).toEqual({ error: 'not-found', message: 'Repo not found or private' })
+  })
+
+  test('import is counted by the create rate limit', async () => {
+    ;(github as any).downloadTarball = async () => { throw new GithubNotFound() }
+    for (let i = 0; i < 10; i++) await postJson('/api/projects', { importUrl: 'octo/x' }, alice)
+    expect((await postJson('/api/projects', { importUrl: 'octo/x' }, alice)).status).toBe(429)
   })
 
   test('restricted project is 403 for others, viewer link works for guest', async () => {

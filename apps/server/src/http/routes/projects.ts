@@ -10,6 +10,7 @@ import {
   setLinkAccess, setStarred, setTitle, touchMember, type Project,
 } from '../../db/projects.js'
 import { ApiFailure, createProjectFromFiles } from '../../projects/create.js'
+import { importFromGithub, ImportError, parseRepoRef } from '../../import/github-import.js'
 import { loadTemplate, TEMPLATES, type TemplateName } from '../../templates/index.js'
 
 type Env = { Variables: { id: Identity } }
@@ -17,7 +18,7 @@ type Env = { Variables: { id: Identity } }
 const HOUR_MS = 60 * 60 * 1000
 const LINK_ACCESS: readonly string[] = ['restricted', 'viewer', 'editor']
 
-const err = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 429 | 501 | 503, error: string, message?: string) =>
+const err = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 429 | 503, error: string, message?: string) =>
   c.json(message ? { error, message } : { error }, status)
 
 async function readBody(c: Context): Promise<Record<string, unknown> | null> {
@@ -91,7 +92,20 @@ export function projectRoutes(deps: Deps): Hono<Env> {
     if (typeof gate !== 'string') return gate
     const body = await readBody(c)
     if (!body) return err(c, 400, 'invalid')
-    if (typeof body.importUrl === 'string') return err(c, 501, 'not-implemented')
+    if (typeof body.importUrl === 'string') {
+      const ref = parseRepoRef(body.importUrl)
+      if (!ref) return err(c, 400, 'invalid', 'Enter a GitHub repo like owner/repo')
+      try {
+        const { files, title } = await importFromGithub(deps.github, ref)
+        const p = await createProjectFromFiles({ sql }, { userId: gate }, files, {
+          title: title.slice(0, 100), template: 'import', linkAccess: 'restricted',
+        })
+        return c.json({ id: p.id })
+      } catch (e) {
+        if (e instanceof ImportError) return err(c, 400, e.code, e.message)
+        return failure(c, e)
+      }
+    }
     const info = TEMPLATES.find(t => t.name === body.template)
     if (!info) return err(c, 400, 'invalid', 'Unknown template')
     try {
