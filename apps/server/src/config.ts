@@ -2,6 +2,8 @@ import { fileURLToPath } from 'node:url'
 
 export type Config = {
   databaseUrl: string
+  /** Direct (non-pooled) URL for migrations; Neon's pooler can't hold session advisory locks. */
+  databaseUrlDirect: string
   githubClientId: string
   githubClientSecret: string
   sessionSecret: string
@@ -26,6 +28,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   return {
     databaseUrl: env.DATABASE_URL ?? 'postgres://localhost:5432/webcode',
+    databaseUrlDirect: env.DATABASE_URL_UNPOOLED || env.DATABASE_URL || 'postgres://localhost:5432/webcode',
     githubClientId: env.GITHUB_CLIENT_ID ?? '',
     githubClientSecret: env.GITHUB_CLIENT_SECRET ?? '',
     sessionSecret: env.SESSION_SECRET ?? 'dev-session-secret-change-me',

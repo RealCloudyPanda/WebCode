@@ -12,7 +12,12 @@ import { RateLimiter } from './util/rate-limit.js'
 
 const config = loadConfig()
 const sql = createDb(config.databaseUrl)
-await migrate(sql)
+if (config.databaseUrlDirect === config.databaseUrl) {
+  await migrate(sql)
+} else {
+  const direct = createDb(config.databaseUrlDirect)
+  try { await migrate(direct) } finally { await direct.end() }
+}
 
 const github = createGithubClient(config)
 const collab = createCollab({ sql, config })
