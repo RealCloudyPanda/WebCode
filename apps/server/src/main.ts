@@ -6,18 +6,14 @@ import { createDb } from './db/db.js'
 import { migrate } from './db/migrate.js'
 import { createApp } from './http/app.js'
 import { createNoopCollab } from './collab/types.js'
-import type { GithubClient } from './auth/github.js'
+import { createGithubClient } from './auth/github.js'
 import { RateLimiter } from './util/rate-limit.js'
 
 const config = loadConfig()
 const sql = createDb(config.databaseUrl)
 await migrate(sql)
 
-const unconfigured = (): never => { throw new Error('GitHub sign-in not configured') }
-const github: GithubClient = {
-  authorizeUrl: unconfigured, exchangeCode: unconfigured, getUser: unconfigured,
-  downloadTarball: unconfigured, fetchAvatar: unconfigured,
-}
+const github = createGithubClient(config)
 const collab = createNoopCollab()
 const app = createApp({ sql, config, github, collab, limiter: new RateLimiter() })
 

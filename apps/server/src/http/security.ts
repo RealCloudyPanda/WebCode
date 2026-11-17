@@ -3,10 +3,20 @@ import type { MiddlewareHandler } from 'hono'
 export function isolationHeaders(): MiddlewareHandler {
   return async (c, next) => {
     await next()
-    c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
-    c.res.headers.set('Cross-Origin-Embedder-Policy', 'require-corp')
-    c.res.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
-    c.res.headers.set('X-Content-Type-Options', 'nosniff')
+    const apply = (h: Headers) => {
+      h.set('Cross-Origin-Opener-Policy', 'same-origin')
+      h.set('Cross-Origin-Embedder-Policy', 'require-corp')
+      h.set('Cross-Origin-Resource-Policy', 'same-origin')
+      h.set('X-Content-Type-Options', 'nosniff')
+    }
+    try {
+      apply(c.res.headers)
+    } catch {
+      // Responses from fetch()/Response.redirect() have immutable headers: re-wrap.
+      const res = c.res
+      c.res = new Response(res.body, { status: res.status, statusText: res.statusText, headers: new Headers(res.headers) })
+      apply(c.res.headers)
+    }
   }
 }
 

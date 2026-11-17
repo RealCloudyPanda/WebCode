@@ -6,6 +6,8 @@ import type { Sql } from '../db/db.js'
 import type { GithubClient } from '../auth/github.js'
 import type { CollabHub } from '../collab/types.js'
 import type { RateLimiter } from '../util/rate-limit.js'
+import { authRoutes } from './routes/auth.js'
+import { avatarRoutes } from './routes/avatar.js'
 import { isolationHeaders, originCheck, requireJson } from './security.js'
 
 export type Deps = {
@@ -50,6 +52,8 @@ export function createApp(deps: Deps): Hono {
   app.use('/api/*', requireJson())
 
   app.get('/api/health', c => c.json({ ok: true }))
+  app.route('/', authRoutes(deps))
+  app.route('/', avatarRoutes(deps))
 
   app.all('/api/*', c => c.json({ error: 'not-found' }, 404))
   app.all('/auth/*', c => c.json({ error: 'not-found' }, 404))
