@@ -22,4 +22,4 @@ COPY --from=build /app/apps/server/templates ./apps/server/templates
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 USER node
 EXPOSE 8080
-CMD ["node_modules/.bin/tsx", "apps/server/src/main.ts"]
+CMD ["apps/server/node_modules/.bin/tsx", "apps/server/src/main.ts"]
