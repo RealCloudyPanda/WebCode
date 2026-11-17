@@ -1,85 +1,92 @@
 # Webcode
 
-Webcode is a free, browser-based collaborative code editor. Open a project, edit files together with other people in real time (live cursors, shared undo), and run Node projects right in the tab: the code executes inside a WebContainer, with real terminals, a test runner and a live preview. Sign in with GitHub, share a project by link, or try the demo as a guest.
+**Google Docs for coding.** Open a real JavaScript/TypeScript project in your browser, share a link, edit the same files together in real time, and install, run, and test it — with nothing to install.
 
-Live demo: `https://<app>.fly.dev`
+![Live collaboration in Webcode](docs/images/collaboration.png)
 
-<!-- TODO: record the two-cursor collab demo with Playwright (from collab.spec.ts) into apps/web/public/landing-demo.webp and embed it here and on the landing page. -->
+## Highlights
 
-## Features
+- **Real-time collaboration** — shared editing with live cursors, name tags, and presence, powered by Yjs CRDTs.
+- **Runs entirely in the browser** — `npm install`, dev servers, and test runners execute inside StackBlitz WebContainers, so the server never runs untrusted code.
+- **Docs-style sharing** — restricted, view-only, or edit links; guests join with just a name.
+- **Full workspace** — file explorer, Monaco editor tabs, terminals, Run/Test, and a live app preview.
+- **Instant demo** — every visitor gets a private, self-cleaning demo copy.
+- **Templates and GitHub import** — React, Node API, TypeScript library, or any public repo.
 
-- Real-time collaborative editing (Monaco + Yjs) with presence and per-user undo
-- In-browser Node runtime (WebContainers), xterm.js terminals, run/test, preview panel
-- GitHub sign-in (full-page redirect, scope `read:user`) plus guest access for demos and shared links
-- Templates (blank, React app, Node API, TypeScript library) and project import
-- Share links with viewer/editor access
-- Everything bundled locally: no CDN assets, cross-origin isolated (COOP/COEP)
+## Screenshots
 
-## How it works
-
-```
-Browser (React SPA)                          Webcode server (one Node process)
- ├─ Monaco + y-monaco  ──┐                    ├─ HTTP API (auth, projects, sharing, import)
- ├─ Yjs doc + awareness ─┼── WebSocket ─────► ├─ Hocuspocus (Yjs sync + presence)
- ├─ WebContainer (Node)  │                    ├─ serves the built SPA (same origin)
- ├─ xterm.js terminals   │                    └─ Neon Postgres (users, projects, Yjs state)
- └─ preview iframe ◄─────┘ (WebContainer preview URL, separate origin)
-```
-
-One Node process serves the SPA, the API and the collaboration WebSocket on the same origin, so cookies stay simple and every response carries the cross-origin isolation headers WebContainers require. The server runs migrations on boot.
-
-## Local development
-
-Requirements: Node 22, pnpm 10.14, a local Postgres.
-
-```sh
-createdb webcode            # and webcode_test for the tests
-pnpm install
-# create .env with the keys below
-pnpm dev                    # server + Vite
-```
-
-`.env` keys:
-
-| Key | Meaning |
+| Landing | Home |
 |---|---|
-| `DATABASE_URL` | Postgres connection string, e.g. `postgres://localhost:5432/webcode` |
-| `GITHUB_CLIENT_ID` | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret |
-| `SESSION_SECRET` | Long random string used to sign cookies |
-| `PUBLIC_URL` | Public origin, e.g. `http://localhost:5173` (callback: `$PUBLIC_URL/auth/github/callback`) |
+| ![Landing page](docs/images/landing.png) | ![Home screen](docs/images/home.png) |
 
-Optional: `PORT` (default 8080), `WEB_DIST_DIR`, `TEMPLATES_DIR`. In production all five keys above are required.
+| Running tests in the browser | Live preview |
+|---|---|
+| ![Tests passing in the in-browser terminal](docs/images/workspace-tests.png) | ![React app running with live preview](docs/images/preview.png) |
 
-Tests: `export DATABASE_URL_TEST=postgres://localhost:5432/webcode_test && pnpm test`. Also `pnpm typecheck`, `pnpm build`.
+| Sharing |
+|---|
+| ![Docs-style share dialog](docs/images/share.png) |
 
-## Deploying (Fly.io + Neon)
+## Architecture
 
-The image runs the TypeScript server through `tsx` (the shared package is consumed as TS source, so a plain `tsc` build would need a bundler; `pnpm build` in the server is a typecheck).
-
-1. GitHub: Settings, Developer settings, OAuth Apps, New. Callback URL `https://<app>.fly.dev/auth/github/callback`. Note the client ID and secret.
-2. Neon: create a project and copy the pooled connection string.
-3. Fly:
-
-```sh
-fly launch --no-deploy --copy-config      # pick your app name, keep fly.toml
-fly secrets set \
-  DATABASE_URL='postgres://...neon.tech/...?sslmode=require' \
-  GITHUB_CLIENT_ID=... \
-  GITHUB_CLIENT_SECRET=... \
-  SESSION_SECRET="$(openssl rand -hex 32)" \
-  PUBLIC_URL=https://<app>.fly.dev
-fly deploy --ha=false                     # one machine only: collaboration state is in-process
-fly scale count 1
-curl -sI https://<app>.fly.dev/ | grep -i cross-origin
+```
+Browser (React + Vite)                      Webcode server (single Node process)
+ ├─ Monaco + y-monaco ─┐                     ├─ Hono HTTP API (auth, projects, sharing, import)
+ ├─ Yjs doc + presence ┼── WebSocket ──────► ├─ Hocuspocus (Yjs sync, access control)
+ ├─ WebContainer (Node)│                     ├─ serves the built SPA (same origin)
+ └─ xterm.js terminals ┘                     └─ PostgreSQL (users, projects, Yjs state)
 ```
 
-The expected result is both `cross-origin-opener-policy: same-origin` and `cross-origin-embedder-policy: require-corp`.
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite, TypeScript, Monaco, xterm.js |
+| Collaboration | Yjs, Hocuspocus |
+| Code execution | WebContainers (in the visitor's browser) |
+| Backend | Node 22, Hono, `postgres` |
+| Database | PostgreSQL (Neon-ready: pooled app traffic, direct migrations) |
+| Testing | Vitest (290+ unit/integration tests), Playwright end-to-end |
+
+## Getting started
+
+**Prerequisites:** Node 22, pnpm 10, PostgreSQL.
+
+```bash
+pnpm install
+# create .env.local with the variables below
+pnpm dev                     # server on :8080, web app on :5173
+```
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (pooled) |
+| `DATABASE_URL_UNPOOLED` | Optional direct connection used for migrations |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth app for sign-in |
+| `SESSION_SECRET` | Long random string for signing cookies |
+| `PUBLIC_URL` | Public origin, e.g. `http://localhost:5173` |
+
+Migrations run automatically on server start.
+
+## Testing
+
+```bash
+pnpm test          # unit + integration (set DATABASE_URL_TEST)
+pnpm typecheck
+pnpm e2e           # Playwright: collaboration, access, running code, demo
+```
+
+## Deployment
+
+The repository includes a production `Dockerfile` and `fly.toml`. Webcode keeps live documents in memory, so run it as a **single instance** (`fly deploy --ha=false`).
+
+```bash
+docker build -t webcode .
+```
 
 ## Limits
 
-2,000 files and 1 MB per file per project; 10 MB stored state per project; 20 projects per user; 10 creates/imports/copies per user per hour; 400 MB site-wide storage ("Webcode is full right now"); 20 simultaneous connections per project. Demo: one live copy per guest, 5 new copies per IP per hour, 300 live copies, deleted after 24 h idle. `node_modules`, `.git`, build output and binary files are never synced.
+Projects up to 2,000 files and 10 MB; files up to 1 MB; 20 projects per user. Code execution supports JavaScript/TypeScript on Node (a WebContainers constraint). WebContainers are free for personal and open-source use; commercial use requires a StackBlitz license.
 
-## WebContainers licence
+## Roadmap
 
-Webcode uses StackBlitz WebContainers (`@webcontainer/api`). It is free for personal and portfolio use; commercial use needs a StackBlitz licence. See https://webcontainers.io/enterprise. WebContainers need a Chromium-based or recent Firefox/Safari browser with cross-origin isolation.
+- Collaborative coding agents
+- Timed code battles between friends
