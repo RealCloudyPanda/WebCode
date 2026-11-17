@@ -69,6 +69,23 @@ describe('webcontainerFs', () => {
     unwatch();
     expect(close).toHaveBeenCalled();
   });
+
+  test('reading a folder fails with EISDIR instead of returning an empty file', async () => {
+    const { webcontainerFs } = await load();
+    const wc = {
+      workdir: '/home/project',
+      fs: {
+        readFile: vi.fn(async () => new Uint8Array(0)),
+        readdir: vi.fn(async (p: string) => {
+          if (p === 'src') return [];
+          throw new Error(`ENOTDIR: not a directory, scandir '${p}'`);
+        }),
+      },
+    };
+    const fs = webcontainerFs(wc as any);
+    await expect(fs.readFile('src')).rejects.toMatchObject({ code: 'EISDIR' });
+    expect(await fs.readFile('empty.txt')).toEqual(new Uint8Array(0));
+  });
 });
 
 describe('watcher paths and workdir', () => {

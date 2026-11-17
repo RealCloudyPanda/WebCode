@@ -33,11 +33,27 @@ export function stripWorkdir(raw: string, workdir: string): string {
   return raw.replace(/^\/+/, '');
 }
 
+async function isDir(wc: WebContainer, path: string): Promise<boolean> {
+  try {
+    await wc.fs.readdir(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The container's file system, rooted at the project folder, as the sync engine sees it. */
 export function webcontainerFs(wc: WebContainer): FsLike {
   return {
     writeFile: (path, data) => wc.fs.writeFile(path, data),
-    readFile: (path) => wc.fs.readFile(path),
+    readFile: async (path) => {
+      const bytes = await wc.fs.readFile(path);
+      // WebContainer reads a folder as an empty file instead of failing with EISDIR.
+      if (bytes.byteLength === 0 && (await isDir(wc, path))) {
+        throw Object.assign(new Error(`EISDIR: illegal operation on a directory, read '${path}'`), { code: 'EISDIR' });
+      }
+      return bytes;
+    },
     rm: (path, opts) => wc.fs.rm(path, opts),
     readdir: async (path) => {
       const entries = await wc.fs.readdir(path || '.', { withFileTypes: true });
