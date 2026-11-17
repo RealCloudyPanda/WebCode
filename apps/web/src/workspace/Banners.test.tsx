@@ -4,7 +4,7 @@ import type { Me, ProjectDetail } from '@webcode/shared';
 import { Banners } from './Banners';
 
 const detail = (over: Partial<ProjectDetail> = {}): ProjectDetail => ({
-  id: 'p1', title: 'Demo', role: 'owner', linkAccess: 'restricted', isDemoCopy: true, expiresAt: null, people: [], guestCount: 0, ...over,
+  id: 'p1', title: 'Demo', role: 'owner', linkAccess: 'restricted', isDemoCopy: true, expiresAt: null, people: [], guestCount: 0, starred: false, ...over,
 });
 const guest: Me = { user: null, guest: { guestId: 'g', name: 'Sam' } };
 const user: Me = { user: { id: 'u', login: 'me', name: 'Me', avatarUrl: '' }, guest: null };

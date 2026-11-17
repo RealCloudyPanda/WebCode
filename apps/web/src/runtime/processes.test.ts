@@ -74,3 +74,23 @@ describe('ProcessManager', () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 });
+
+describe('shells', () => {
+  test('killShells kills running jsh processes', async () => {
+    const kill = vi.fn();
+    const wc = {
+      spawn: vi.fn(async () => ({
+        output: new ReadableStream<string>({ start: (c) => c.close() }),
+        exit: new Promise<number>(() => {}),
+        kill,
+        input: new WritableStream<string>(),
+      })),
+    } as unknown as WebContainer;
+    const m = new ProcessManager(wc);
+    void m.shell(term());
+    await vi.waitFor(() => expect(wc.spawn).toHaveBeenCalled());
+    await Promise.resolve();
+    m.killShells();
+    expect(kill).toHaveBeenCalledTimes(1);
+  });
+});

@@ -85,8 +85,14 @@ export function CodeEditor({ doc, awareness, path, readOnly, hideCursors, ref }:
     models.current.add(model);
     editor.setModel(model);
     const binding = new MonacoBinding(ytext, model, new Set([editor]), awareness ?? undefined);
+    // Changes applied from other peers (y -> model) must never be undone locally; only guard local edits.
+    let remote = false;
+    const onBefore = (tr: Y.Transaction) => { remote = tr.origin !== binding; };
+    const onAfter = () => { remote = false; };
+    doc.on('beforeTransaction', onBefore);
+    doc.on('afterTransaction', onAfter);
     const sizeGuard = model.onDidChangeContent((e) => {
-      if (e.isUndoing || model.getValueLength() * 3 <= LIMITS.maxFileBytes) return;
+      if (remote || e.isUndoing || model.getValueLength() * 3 <= LIMITS.maxFileBytes) return;
       if (utf8.encode(model.getValue()).length > LIMITS.maxFileBytes) {
         editor.trigger('webcode', 'undo', null);
         toastRef.current("Files can't be larger than 1 MB");
@@ -94,6 +100,8 @@ export function CodeEditor({ doc, awareness, path, readOnly, hideCursors, ref }:
     });
     return () => {
       sizeGuard.dispose();
+      doc.off('beforeTransaction', onBefore);
+      doc.off('afterTransaction', onAfter);
       binding.destroy();
       if (!getFiles(doc).has(path)) {
         model.dispose();

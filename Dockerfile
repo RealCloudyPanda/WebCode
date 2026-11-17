@@ -2,6 +2,8 @@ FROM node:22-slim AS build
 RUN corepack enable
 WORKDIR /app
 COPY . .
+# CI=true: pnpm refuses to remove node_modules without a TTY otherwise.
+ENV CI=true
 RUN pnpm install --frozen-lockfile
 RUN pnpm build
 # Drop dev dependencies (vite, vitest, ...) but keep tsx, which runs the server.

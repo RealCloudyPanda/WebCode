@@ -195,8 +195,10 @@ describe.skipIf(!TEST_DB_URL)(`projects routes (${TEST_DB_URL ? 'postgres' : dbS
 
   test('star toggles for members; guests 401', async () => {
     const id = await create()
+    expect((await getJson(`/api/projects/${id}`, alice)).starred).toBe(false)
     await patchJson(`/api/projects/${id}`, { starred: true }, alice)
     expect((await getJson('/api/projects', alice))[0].starred).toBe(true)
+    expect((await getJson(`/api/projects/${id}`, alice)).starred).toBe(true)
     await patchJson(`/api/projects/${id}`, { linkAccess: 'viewer' }, alice)
     expect((await patchJson(`/api/projects/${id}`, { starred: true }, guest)).status).toBe(401)
   })

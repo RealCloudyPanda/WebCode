@@ -136,6 +136,16 @@ export function TerminalPanel({ ref, manager, unsupported }: Props) {
     }
   }, [manager, tabs]);
 
+  // Kill the jsh processes when the manager goes away (unmount or project switch); a new manager starts fresh shells.
+  useEffect(() => {
+    if (!manager) return;
+    const set = started.current;
+    return () => {
+      manager.killShells();
+      set.clear();
+    };
+  }, [manager]);
+
   return (
     <section className="terminal" aria-label="Terminal">
       <div className="terminal-head">

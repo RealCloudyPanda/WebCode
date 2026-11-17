@@ -54,6 +54,7 @@ async function pump(proc: WebContainerProcess, term: TermSink): Promise<void> {
 export class ProcessManager {
   private installing: Promise<number> | null = null;
   private readonly procs = new Map<ProcessKind, WebContainerProcess>();
+  private readonly shells = new Set<WebContainerProcess>();
 
   constructor(private readonly wc: WebContainer) {}
 
@@ -124,6 +125,7 @@ export class ProcessManager {
 
   async shell(term: TermSink): Promise<void> {
     const proc = await this.wc.spawn('jsh', { terminal: { cols: term.cols, rows: term.rows } });
+    this.shells.add(proc);
     const writer = proc.input.getWriter();
     const off = term.onInput?.((d) => void writer.write(d).catch(() => {}));
     try {
@@ -131,6 +133,13 @@ export class ProcessManager {
     } finally {
       off?.();
       writer.releaseLock();
+      this.shells.delete(proc);
     }
+  }
+
+  /** Kills every interactive shell started by `shell()`. */
+  killShells(): void {
+    for (const p of this.shells) p.kill();
+    this.shells.clear();
   }
 }

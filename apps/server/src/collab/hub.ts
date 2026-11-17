@@ -191,7 +191,7 @@ export function createCollab(deps: {
     },
   })
 
-  const wss = new WebSocketServer({ noServer: true })
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 * 1024 })
 
   return {
     handleUpgrade(req, socket: Duplex, head) {

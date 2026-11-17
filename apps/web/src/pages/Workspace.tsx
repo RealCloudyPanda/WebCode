@@ -138,7 +138,7 @@ function WorkspaceView({ detail, me, onDetail }: ViewProps) {
   const [cursors, setCursors] = useState(true);
   const [finding, setFinding] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [starred, setStarred] = useState(false);
+  const [starred, setStarred] = useState(detail.starred);
   const openedInitial = useRef(false);
   const terminalRef = useRef<TerminalHandle>(null);
   const [manager, setManager] = useState<ProcessManager | null>(null);

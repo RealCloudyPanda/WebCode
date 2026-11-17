@@ -69,7 +69,8 @@ fly secrets set \
   GITHUB_CLIENT_SECRET=... \
   SESSION_SECRET="$(openssl rand -hex 32)" \
   PUBLIC_URL=https://<app>.fly.dev
-fly deploy
+fly deploy --ha=false                     # one machine only: collaboration state is in-process
+fly scale count 1
 curl -sI https://<app>.fly.dev/ | grep -i cross-origin
 ```
 

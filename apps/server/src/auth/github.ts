@@ -23,7 +23,7 @@ export class GithubTooLarge extends Error {
   }
 }
 
-export const MAX_TARBALL_BYTES = 50_000_000
+export const MAX_TARBALL_BYTES = 20_000_000
 const FETCH_TIMEOUT_MS = 15_000
 const timeout = () => AbortSignal.timeout(FETCH_TIMEOUT_MS)
 
@@ -58,7 +58,7 @@ export function createGithubClient(config: Config): GithubClient {
       return { githubId: j.id, login: j.login, name: j.name ?? null, avatarUrl: j.avatar_url ?? '' }
     },
     async downloadTarball(owner, repo, ref) {
-      const path = `${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tarball${ref ? `/${encodeURIComponent(ref)}` : ''}`
+      const path = `${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tarball${ref ? `/${ref.split('/').map(encodeURIComponent).join('/')}` : ''}`
       const r = await fetch(`https://api.github.com/repos/${path}`, { headers: API_HEADERS, redirect: 'follow', signal: timeout() })
       if (r.status === 404) throw new GithubNotFound()
       if (!r.ok) throw new Error(`GitHub tarball download failed: ${r.status}`)
@@ -75,7 +75,11 @@ export function createGithubClient(config: Config): GithubClient {
         if (total > MAX_TARBALL_BYTES) { await reader.cancel(); throw new GithubTooLarge() }
         chunks.push(value)
       }
-      return new Uint8Array(Buffer.concat(chunks))
+      if (chunks.length === 1) return chunks[0]!
+      const out = new Uint8Array(total)
+      let off = 0
+      for (const c of chunks) { out.set(c, off); off += c.byteLength }
+      return out
     },
     async fetchAvatar(url) {
       const r = await fetch(url, { headers: { 'user-agent': 'webcode' }, redirect: 'follow', signal: timeout() })

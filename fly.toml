@@ -1,4 +1,6 @@
 app = "webcode"
+# Run exactly ONE machine: Hocuspocus document state, presence and rate limits live in-process.
+# Deploy with `fly deploy --ha=false` and keep `fly scale count 1`.
 primary_region = "iad"
 
 [build]
@@ -23,4 +25,4 @@ primary_region = "iad"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "1gb"

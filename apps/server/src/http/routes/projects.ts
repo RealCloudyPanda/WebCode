@@ -42,6 +42,7 @@ export function projectRoutes(deps: Deps): Hono<Env> {
 
   async function detail(p: Project, viewer: Viewer): Promise<ProjectDetail> {
     const members = await listMembers(sql, p.id)
+    const me = viewer.kind === 'user' ? members.find(m => m.userId === viewer.userId) : undefined
     return {
       id: p.id, title: p.title, role: roleOf(p, viewer), linkAccess: p.linkAccess,
       isDemoCopy: p.isDemoCopy, expiresAt: p.expiresAt ? p.expiresAt.toISOString() : null,
@@ -50,6 +51,7 @@ export function projectRoutes(deps: Deps): Hono<Env> {
         role: roleOf(p, { kind: 'user', userId: m.userId }),
       })),
       guestCount: collab.liveGuests(p.id),
+      starred: me?.starred ?? false,
     }
   }
 

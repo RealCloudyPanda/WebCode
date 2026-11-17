@@ -18,6 +18,7 @@ const detail = (over: Partial<ProjectDetail> = {}): ProjectDetail => ({
     { userId: 'u1', login: 'me', name: 'Me', role: 'owner' },
   ],
   guestCount: 0,
+  starred: false,
   ...over,
 });
 
