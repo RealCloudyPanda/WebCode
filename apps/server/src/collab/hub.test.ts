@@ -30,6 +30,8 @@ async function waitFor(check: () => boolean | Promise<boolean>, timeout = 3000):
   }
 }
 const settle = () => sleep(250)
+const role = (role: string, readOnly: boolean) => ({ type: 'role', role, readOnly })
+const roleMsgs = (c: { stateless: unknown[] }) => c.stateless.filter(m => (m as any).type === 'role')
 
 type Client = {
   doc: Y.Doc
@@ -147,6 +149,19 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
       expect(text(owner)).toMatch(/^hi/)
     })
 
+    test('each connection is told its starting role right after authenticating', async () => {
+      const id = await mkProject('viewer')
+      const owner = await connect(id, alice.cookie)
+      const v = await connect(id, g1)
+      await waitFor(() => roleMsgs(owner).length > 0 && roleMsgs(v).length > 0)
+      expect(roleMsgs(owner)).toEqual([role('owner', false)])
+      expect(roleMsgs(v)).toEqual([role('viewer', true)])
+      const eid = await mkProject('editor')
+      const e = await connect(eid, g2)
+      await waitFor(() => roleMsgs(e).length > 0)
+      expect(roleMsgs(e)).toEqual([role('editor', false)])
+    })
+
     test('restricted project rejects non-owners; owner may connect', async () => {
       const id = await mkProject('restricted')
       await expect(connect(id, bob.cookie)).rejects.toThrow('no-access')
@@ -179,7 +194,11 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
       const owner = await connect(id, alice.cookie)
       const g = await connect(id, g1)
       const quiet = await connect(id, g2)
+      await waitFor(() => roleMsgs(g).length === 1)
       await setLinkAccess(sql, id, 'viewer'); await hub.reevaluateAccess(id)
+      await hub.reevaluateAccess(id) // no change: no second message
+      await waitFor(() => roleMsgs(g).length === 2)
+      expect(g.stateless).toContainEqual({ type: 'role', role: 'viewer', readOnly: true })
       getFiles(g.doc).get('src/a.ts')!.insert(0, 'X')
       await settle()
       expect(text(owner)).not.toMatch(/^X/)
@@ -187,6 +206,9 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
       // Back to editor. (Use a client that did not type while read-only: a rejected update stays in
       // that client's doc and its later updates depend on it; the real editor blocks typing instead.)
       await setLinkAccess(sql, id, 'editor'); await hub.reevaluateAccess(id)
+      await waitFor(() => roleMsgs(quiet).length === 3)
+      expect(roleMsgs(quiet)).toEqual([role('editor', false), role('viewer', true), role('editor', false)])
+      expect(roleMsgs(owner)).toEqual([role('owner', false)])
       getFiles(quiet.doc).get('src/a.ts')!.insert(0, 'Y')
       await waitFor(() => text(owner).startsWith('Y'))
 
@@ -251,6 +273,8 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
     getFiles(owner.doc).get('src/a.ts')!.insert(0, 'z'.repeat(3_000))
     await waitFor(() => e.stateless.some(m => (m as any).type === 'size-locked'))
     expect(e.stateless).toContainEqual({ type: 'size-locked' })
+    await waitFor(() => roleMsgs(e).length === 2)
+    expect(roleMsgs(e)).toEqual([role('editor', false), role('editor', true)])
 
     getFiles(e.doc).get('src/a.ts')!.insert(0, 'X')
     await settle()
@@ -261,10 +285,14 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
     // A newcomer while locked is read-only and told so.
     const late = await connect(id, g2)
     await waitFor(() => late.stateless.some(m => (m as any).type === 'size-locked'))
+    expect(roleMsgs(late)).toEqual([role('editor', true)])
 
     const t = getFiles(owner.doc).get('src/a.ts')!
     t.delete(0, t.length)
     await waitFor(() => late.stateless.some(m => (m as any).type === 'size-unlocked'))
+    await waitFor(() => roleMsgs(late).length === 2)
+    expect(roleMsgs(late)).toEqual([role('editor', true), role('editor', false)])
+    expect(roleMsgs(owner)).toEqual([role('owner', false)])
     // `late` never typed while locked (see the reevaluateAccess test), so its edits apply again.
     getFiles(late.doc).get('src/a.ts')!.insert(0, 'back')
     await waitFor(() => text(owner).startsWith('back'))
@@ -276,6 +304,7 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
     const owner = await connect(id, alice.cookie)
     const e = await connect(id, g1)
     expect(e.stateless).toContainEqual({ type: 'size-locked' })
+    expect(roleMsgs(e)).toEqual([role('editor', true)]) // locked from the start: one message
     getFiles(e.doc).get('a.txt')!.insert(0, 'X')
     await settle()
     expect(text(owner, 'a.txt')).toBe('a')

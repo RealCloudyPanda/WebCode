@@ -85,13 +85,27 @@ export function createCollab(deps: {
   const liveDoc = (projectId: string) => hocuspocus.documents.get(projectId)
   const connectionsOf = (projectId: string) => liveDoc(projectId)?.getConnections() ?? []
 
+  /** Tells this connection's client its role and whether its edits are accepted (it locks the editor). */
+  const sendRole = (c: Connection) =>
+    c.sendStateless(JSON.stringify({ type: 'role', role: ctxOf(c).role, readOnly: c.readOnly }))
+
+  /** Sets a live connection's role and read-only flag, notifying its client when either changes. */
+  const applyAccess = (c: Connection, role: Role) => {
+    const ctx = ctxOf(c)
+    const readOnly = isReadOnly(c.document.name, role)
+    if (ctx.role === role && c.readOnly === readOnly) return
+    ctx.role = role
+    c.readOnly = readOnly
+    sendRole(c)
+  }
+
   /** Recomputes the size lock; on a change, updates every connection's read-only flag and tells clients. */
   const updateLock = (document: Document, stats: { storedBytes: number; fileCount: number }) => {
     const over = stats.storedBytes > limits.maxProjectBytes || stats.fileCount > limits.maxFiles
     if (over === locked.has(document.name)) return
     if (over) locked.add(document.name)
     else locked.delete(document.name)
-    for (const c of document.getConnections()) c.readOnly = isReadOnly(document.name, ctxOf(c).role)
+    for (const c of document.getConnections()) applyAccess(c, ctxOf(c).role)
     document.broadcastStateless(JSON.stringify({ type: over ? 'size-locked' : 'size-unlocked' }))
   }
 
@@ -147,6 +161,7 @@ export function createCollab(deps: {
       release(documentName, ctx.socketKey)
       // The lock may have changed between authentication and attaching to the document.
       connection.readOnly = isReadOnly(documentName, ctx.role)
+      sendRole(connection)
       if (locked.has(documentName)) connection.sendStateless(JSON.stringify({ type: 'size-locked' }))
       await touchActive(sql, documentName)
     },
@@ -185,8 +200,7 @@ export function createCollab(deps: {
         const ctx = ctxOf(c)
         const role = project ? resolveAccess(project, ctx.viewer) : 'none'
         if (role === 'none') { kick(c, CLOSE_REVOKED); continue }
-        ctx.role = role
-        c.readOnly = isReadOnly(projectId, role)
+        applyAccess(c, role)
       }
     },
 
