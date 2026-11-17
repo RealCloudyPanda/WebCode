@@ -62,7 +62,7 @@ export function usePeers(awareness: Awareness | null): Peer[] {
 }
 
 const HEX = /^#([0-9a-f]{6})$/i;
-const FALLBACK = '#8ab4f8';
+const FALLBACK = '#7dd3a0';
 
 function rgb(color: string): [number, number, number] {
   const hex = HEX.exec(color)?.[1] ?? FALLBACK.slice(1);

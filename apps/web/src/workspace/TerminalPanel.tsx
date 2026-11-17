@@ -55,7 +55,7 @@ function TermView({ sink, active }: { sink: BufferedSink; active: boolean }) {
       fontSize: 12,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
       convertEol: false,
-      theme: { background: '#141416', foreground: '#e3e3e3', cursor: '#8ab4f8', selectionBackground: '#8ab4f84d' },
+      theme: { background: '#0d1411', foreground: '#e3e3e3', cursor: '#7dd3a0', selectionBackground: '#7dd3a04d' },
     });
     const fit = new FitAddon();
     fitRef.current = fit;
