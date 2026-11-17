@@ -70,7 +70,7 @@ test('POST with missing Origin is 403, also under /auth', async () => {
 })
 
 test('matching Origin passes the check', async () => {
-  const r = await post('/api/projects', { origin: okOrigin, 'content-type': 'application/json' }, '{}')
+  const r = await post('/api/nope', { origin: okOrigin, 'content-type': 'application/json' }, '{}')
   expect(r.status).toBe(404)
 })
 
