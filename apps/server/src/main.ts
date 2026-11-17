@@ -1,0 +1,43 @@
+import { serve } from '@hono/node-server'
+import type { Server } from 'node:http'
+import type { Duplex } from 'node:stream'
+import { loadConfig } from './config.js'
+import { createDb } from './db/db.js'
+import { migrate } from './db/migrate.js'
+import { createApp } from './http/app.js'
+import { createNoopCollab } from './collab/types.js'
+import type { GithubClient } from './auth/github.js'
+import { RateLimiter } from './util/rate-limit.js'
+
+const config = loadConfig()
+const sql = createDb(config.databaseUrl)
+await migrate(sql)
+
+const unconfigured = (): never => { throw new Error('GitHub sign-in not configured') }
+const github: GithubClient = {
+  authorizeUrl: unconfigured, exchangeCode: unconfigured, getUser: unconfigured,
+  downloadTarball: unconfigured, fetchAvatar: unconfigured,
+}
+const collab = createNoopCollab()
+const app = createApp({ sql, config, github, collab, limiter: new RateLimiter() })
+
+const server = serve({ fetch: app.fetch, port: config.port }, info => {
+  console.log(`webcode server listening on :${info.port}`)
+}) as Server
+
+server.on('upgrade', (req, socket: Duplex, head) => {
+  if (new URL(req.url ?? '/', 'http://x').pathname === '/collab') collab.handleUpgrade(req, socket, head)
+  else socket.destroy()
+})
+
+let closing = false
+async function shutdown() {
+  if (closing) return
+  closing = true
+  await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections?.() })
+  await collab.destroy()
+  await sql.end()
+  process.exit(0)
+}
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)
