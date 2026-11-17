@@ -77,7 +77,9 @@ export function projectRoutes(deps: Deps): Hono<Env> {
     const filter = q.filter === 'mine' || q.filter === 'shared' ? q.filter : 'any'
     const sort = q.sort === 'title' ? 'title' : 'opened'
     const rows = await listForUser(sql, user.id, filter, sort)
-    const out: ProjectSummary[] = rows.map(r => ({
+    const out: ProjectSummary[] = rows
+      .filter(r => roleOf(r, { kind: 'user', userId: user.id }) !== 'none')
+      .map(r => ({
       id: r.id, title: r.title, isOwner: r.isOwner, ownerLogin: r.ownerLogin, starred: r.starred,
       lastOpenedAt: r.lastOpenedAt.toISOString(), previewText: r.previewText, liveCount: collab.liveCount(r.id),
     }))

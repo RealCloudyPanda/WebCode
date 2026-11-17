@@ -206,6 +206,18 @@ describe.skipIf(!TEST_DB_URL)(`projects routes (${TEST_DB_URL ? 'postgres' : dbS
     expect((await get(`/api/projects/${id}`, alice)).status).toBe(404)
   })
 
+  test('revoked projects disappear from the member list but stay for the owner', async () => {
+    const id = await create()
+    await patchJson(`/api/projects/${id}`, { linkAccess: 'viewer' }, alice)
+    await get(`/api/projects/${id}`, bob)
+    expect((await getJson('/api/projects?filter=shared', bob)).map((p: any) => p.id)).toEqual([id])
+    await patchJson(`/api/projects/${id}`, { linkAccess: 'restricted' }, alice)
+    for (const f of ['any', 'shared']) {
+      expect((await getJson(`/api/projects?filter=${f}`, bob)).map((p: any) => p.id)).not.toContain(id)
+    }
+    expect((await getJson('/api/projects?filter=any', alice)).map((p: any) => p.id)).toContain(id)
+  })
+
   test('copy uses snapshotFiles, titles Copy of, restricted', async () => {
     const id = await create()
     await patchJson(`/api/projects/${id}`, { linkAccess: 'viewer' }, alice)
