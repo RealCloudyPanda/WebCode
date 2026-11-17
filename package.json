@@ -9,9 +9,10 @@
     "build": "pnpm -r build",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
-    "e2e": "pnpm --filter @webcode/web e2e"
+    "e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^22.10.0",
     "jsdom": "^26.1.0",
     "typescript": "^5.7.2",
