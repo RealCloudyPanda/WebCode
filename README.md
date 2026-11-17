@@ -2,6 +2,10 @@
 
 **Google Docs for coding.** Open a real JavaScript/TypeScript project in your browser, share a link, edit the same files together in real time, and install, run, and test it — with nothing to install.
 
+https://github.com/RealCloudyPanda/WebCode/raw/main/docs/demo.mp4
+
+▶️ **[Watch the demo video](docs/demo.mp4)** — landing, home, opening a project, and running its tests in the browser.
+
 ![Live collaboration in Webcode](docs/images/collaboration.png)
 
 ## Highlights
