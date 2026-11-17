@@ -23,28 +23,47 @@ export function Home() {
   const [filter, setFilter] = useState<Filter>('any');
   const [sort, setSort] = useState<Sort>('opened');
   const [query, setQuery] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [removing, setRemoving] = useState<ProjectSummary | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setProjects(await api.get<ProjectSummary[]>(`/api/projects?filter=${filter}&sort=${sort}`));
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not load projects');
-      setProjects((p) => p ?? []);
-    }
-  }, [filter, sort, toast]);
+  const loadSeq = useRef(0);
+
+  const load = useCallback(
+    async (userInitiated: boolean) => {
+      const seq = ++loadSeq.current;
+      try {
+        const list = await api.get<ProjectSummary[]>(`/api/projects?filter=${filter}&sort=${sort}`);
+        if (seq !== loadSeq.current) return;
+        setLoadFailed(false);
+        setProjects(list);
+      } catch (e) {
+        if (seq !== loadSeq.current || !userInitiated) return;
+        toast(e instanceof Error ? e.message : 'Could not load projects');
+        setLoadFailed(true);
+        setProjects([]);
+      }
+    },
+    [filter, sort, toast],
+  );
+
+  const loadTemplates = useCallback(() => {
+    api
+      .get<TemplateInfo[]>('/api/templates')
+      .then(setTemplates)
+      .catch((e) => toast(e instanceof Error ? e.message : 'Could not load templates'));
+  }, [toast]);
 
   useEffect(() => {
-    api.get<TemplateInfo[]>('/api/templates').then(setTemplates).catch(() => {});
-  }, []);
+    loadTemplates();
+  }, [loadTemplates]);
 
   useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), 30_000);
+    void load(true);
+    const t = setInterval(() => void load(false), 30_000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -79,6 +98,7 @@ export function Home() {
 
   async function remove(p: ProjectSummary) {
     setRemoving(null);
+    loadSeq.current++;
     try {
       await api.del(`/api/projects/${p.id}`);
       setProjects((list) => list?.filter((x) => x.id !== p.id) ?? null);
@@ -148,7 +168,7 @@ export function Home() {
         </div>
         {projects && shown.length === 0 ? (
           <p className="empty">
-            {projects.length === 0 ? 'No projects yet. Start one above.' : 'No projects match your search.'}
+            {loadFailed ? "Couldn't load projects." : projects.length === 0 ? 'No projects yet. Start one above.' : 'No projects match your search.'}
           </p>
         ) : (
           <ProjectGrid

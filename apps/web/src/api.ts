@@ -1,10 +1,17 @@
+function friendlyMessage(status: number): string {
+  if (status === 0 || status >= 500) return 'Something went wrong, try again';
+  if (status === 401) return 'Please sign in again';
+  if (status === 404) return 'That project no longer exists';
+  return 'Request failed';
+}
+
 export class ApiFailure extends Error {
   constructor(
     public status: number,
     public error: string,
     message?: string,
   ) {
-    super(message ?? error);
+    super(message ?? friendlyMessage(status));
     this.name = 'ApiFailure';
   }
 }
@@ -15,7 +22,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(path, init);
+  let res: Response;
+  try {
+    res = await fetch(path, init);
+  } catch {
+    throw new ApiFailure(0, 'network');
+  }
   let data: unknown = undefined;
   if (res.status !== 204) {
     try {

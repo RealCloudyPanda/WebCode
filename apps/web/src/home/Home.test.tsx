@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import type { ProjectSummary } from '@webcode/shared';
@@ -135,5 +135,69 @@ describe('Home', () => {
     await userEvent.type(screen.getByLabelText('owner/repo or GitHub URL'), 'a/b');
     await userEvent.click(screen.getByRole('button', { name: 'Import project' }));
     expect(await screen.findByText('Repo not found')).toBeTruthy();
+  });
+
+  it('ignores a stale list response after the filter changes', async () => {
+    setup();
+    await screen.findByText('todo-api');
+    const base = fetchMock.getMockImplementation()!;
+    let releaseSlow!: () => void;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes('filter=mine')) {
+        await new Promise<void>((r) => (releaseSlow = r));
+        return json([project({ id: 'old', title: 'stale-one' })]);
+      }
+      if (url.includes('filter=shared')) return json([project({ id: 'n', title: 'fresh-one' })]);
+      return base(url, init);
+    });
+    await userEvent.selectOptions(screen.getByLabelText('Filter'), 'mine');
+    await userEvent.selectOptions(screen.getByLabelText('Filter'), 'shared');
+    await screen.findByText('fresh-one');
+    releaseSlow();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('stale-one')).toBeNull();
+    expect(screen.getByText('fresh-one')).toBeTruthy();
+  });
+
+  it('clears the list and toasts when a filter change fails', async () => {
+    setup();
+    await screen.findByText('todo-api');
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+      url.includes('filter=mine') ? json({ error: 'boom' }, 500) : base(url, init),
+    );
+    await userEvent.selectOptions(screen.getByLabelText('Filter'), 'mine');
+    expect((await screen.findByRole('status')).textContent).toBe('Something went wrong, try again');
+    expect(screen.queryByText('todo-api')).toBeNull();
+  });
+
+  it('toasts when templates fail to load', async () => {
+    setup();
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+      url === '/api/templates' ? json({ error: 'x' }, 500) : base(url, init),
+    );
+    cleanup();
+    resetSession();
+    render(
+      <MemoryRouter>
+        <ToastProvider>
+          <Home />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    expect((await screen.findByRole('status')).textContent).toBe('Something went wrong, try again');
+  });
+
+  it('Escape cancels a rename without committing on blur', async () => {
+    setup();
+    const card = (await screen.findByText('todo-api')).closest('.card') as HTMLElement;
+    await userEvent.click(within(card).getByRole('button', { name: 'More actions' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const input = screen.getByLabelText('Project name');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'renamed{Escape}');
+    await userEvent.click(document.body);
+    expect(fetchMock.mock.calls.filter((c) => c[1]?.method === 'PATCH')).toHaveLength(0);
   });
 });

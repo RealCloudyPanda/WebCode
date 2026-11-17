@@ -22,6 +22,7 @@ export function ProjectCard({ project, onRename, onRemove }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(project.title);
   const ref = useRef<HTMLDivElement>(null);
+  const renamingRef = useRef(false);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -33,6 +34,8 @@ export function ProjectCard({ project, onRename, onRemove }: Props) {
   }, [menuOpen]);
 
   function commitRename() {
+    if (!renamingRef.current) return;
+    renamingRef.current = false;
     const t = draft.trim();
     setRenaming(false);
     if (t && t !== project.title) onRename(t);
@@ -72,7 +75,11 @@ export function ProjectCard({ project, onRename, onRemove }: Props) {
           onBlur={commitRename}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commitRename();
-            if (e.key === 'Escape') setRenaming(false);
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              renamingRef.current = false;
+              setRenaming(false);
+            }
           }}
         />
       )}
@@ -86,6 +93,7 @@ export function ProjectCard({ project, onRename, onRemove }: Props) {
             onClick={() => {
               setMenuOpen(false);
               setDraft(project.title);
+              renamingRef.current = true;
               setRenaming(true);
             }}
           >
