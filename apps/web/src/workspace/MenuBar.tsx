@@ -31,7 +31,7 @@ export type MenuActions = {
 type Item = { label: string; onClick?: () => void; title?: string };
 type Menu = { label: string; items: Item[] };
 
-const REPO_URL = 'https://github.com/RealCloudyPanda/webcode';
+const REPO_URL = 'https://github.com/RealCloudyPanda/WebCode';
 
 export function MenuBar({ a, readOnly }: { a: MenuActions; readOnly: boolean }) {
   const [open, setOpen] = useState<string | null>(null);

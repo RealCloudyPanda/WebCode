@@ -1,4 +1,6 @@
-import * as monaco from 'monaco-editor';
+import './monacoCore';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
+import { javascriptDefaults, typescriptDefaults } from 'monaco-editor/esm/vs/languages/features/typescript/register.js';
 import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
@@ -33,7 +35,7 @@ monaco.editor.defineTheme('webcode-dark', {
 });
 
 // Imports of packages that are not in the editor's virtual file system would all be flagged.
-for (const defaults of [monaco.typescript.typescriptDefaults, monaco.typescript.javascriptDefaults]) {
+for (const defaults of [typescriptDefaults, javascriptDefaults]) {
   defaults.setDiagnosticsOptions({ noSemanticValidation: true });
 }
 

@@ -1,9 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { getFiles, getMeta, pickColor, type Me, type ProjectDetail } from '@webcode/shared';
+import { Link, useNavigate, useParams } from 'react-router';
+import { docToFiles, getFiles, getMeta, pickColor, type Me, type ProjectDetail } from '@webcode/shared';
 import { api, ApiFailure } from '../api';
 import { setLocalFile, setLocalUser, usePeers, type Peer } from '../collab/presence';
-import { useProject, type ProjectConnection } from '../collab/useProject';
+import { useProject, type ProjectConnection, type ProjectRole } from '../collab/useProject';
 import { ProcessManager } from '../runtime/processes';
 import { SyncEngine } from '../runtime/syncEngine';
 import { clearWorkdir, getWebContainer, RuntimeUnsupported, webcontainerFs } from '../runtime/webcontainer';
@@ -11,6 +11,9 @@ import { useToast } from '../components/Toast';
 import { TopBar } from '../components/TopBar';
 import type { EditorHandle } from '../editor/CodeEditor';
 import { useMe } from '../session';
+import { Banners } from '../workspace/Banners';
+import { downloadZip } from '../workspace/downloadZip';
+import { ShareDialog } from '../workspace/ShareDialog';
 import { EditorTabs } from '../workspace/EditorTabs';
 import { Explorer, type ExplorerHandle } from '../workspace/Explorer';
 import { FindInFiles } from '../workspace/FindInFiles';
@@ -118,9 +121,10 @@ type ViewProps = { detail: ProjectDetail; me: Me; onDetail: (d: ProjectDetail) =
 
 function WorkspaceView({ detail, me, onDetail }: ViewProps) {
   const toast = useToast();
+  const navigate = useNavigate();
   const conn = useProject(detail.id);
   const { doc, awareness, status, fatal, sizeLocked } = conn;
-  const role = conn.role ?? detail.role;
+  const role: ProjectRole = conn.role ?? (detail.role === 'none' ? 'viewer' : detail.role);
   const peers = usePeers(awareness);
   const tree = useDocTree(doc);
   const title = useTitle(doc, detail.title);
@@ -133,6 +137,7 @@ function WorkspaceView({ detail, me, onDetail }: ViewProps) {
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [cursors, setCursors] = useState(true);
   const [finding, setFinding] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [starred, setStarred] = useState(false);
   const openedInitial = useRef(false);
   const terminalRef = useRef<TerminalHandle>(null);
@@ -280,6 +285,19 @@ function WorkspaceView({ detail, me, onDetail }: ViewProps) {
     if (p.file && getFiles(doc).has(p.file)) open(p.file);
   };
 
+  const startOver = () => {
+    api
+      .post<{ id: string }>('/api/demo/start-over')
+      .then(({ id }) => navigate(`/p/${id}`))
+      .catch((e) => toast(e instanceof Error ? e.message : 'Could not start over'));
+  };
+  const makeCopy = () => {
+    api
+      .post<{ id: string }>(`/api/projects/${encodeURIComponent(detail.id)}/copy`)
+      .then(({ id }) => navigate(`/p/${id}`))
+      .catch((e) => toast(e instanceof Error ? e.message : 'Could not make a copy'));
+  };
+
   const trigger = (id: string) => editorRef.current?.trigger(id);
   const menu = useMemo(
     () => ({
@@ -287,8 +305,10 @@ function WorkspaceView({ detail, me, onDetail }: ViewProps) {
       newFolder: () => explorerRef.current?.newFolder(),
       rename: () => explorerRef.current?.rename(active),
       remove: () => explorerRef.current?.remove(active),
-      downloadZip: () => {},
-      share: () => {},
+      makeCopy: me.user ? makeCopy : undefined,
+      copyDisabledReason: 'Sign in to make a copy',
+      downloadZip: () => downloadZip(docToFiles(doc), title),
+      share: () => setSharing(true),
       undo: () => trigger('undo'),
       redo: () => trigger('redo'),
       find: () => trigger('actions.find'),
@@ -306,7 +326,7 @@ function WorkspaceView({ detail, me, onDetail }: ViewProps) {
       toggleCursors: () => setCursors((v) => !v),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active, manager],
+    [active, manager, me.user, title],
   );
 
   if (fatal === 'deleted') return <Message title="This project was deleted" />;
@@ -326,7 +346,7 @@ function WorkspaceView({ detail, me, onDetail }: ViewProps) {
         status={status}
         peers={peers}
         onPeerClick={jumpToPeer}
-        onShare={menu.share}
+        onShare={() => setSharing(true)}
         me={me}
       />
       <MenuBar a={menu} readOnly={editorReadOnly} />
@@ -344,10 +364,8 @@ function WorkspaceView({ detail, me, onDetail }: ViewProps) {
         runBlockedReason={unsupported}
         installing={installing}
       />
-      {conn.role === 'viewer' && (
-        <div className="banner" role="status">You have view access. Changes from the terminal stay in your browser.</div>
-      )}
-      {revoked && <div className="banner banner-warn" role="alert">You no longer have access</div>}
+      <Banners detail={detail} me={me} role={role} sizeLocked={sizeLocked} revoked={revoked} onStartOver={startOver} />
+      {sharing && <ShareDialog detail={detail} isOwner={isOwner} onChange={onDetail} onClose={() => setSharing(false)} />}
       <div className="ws-body">
         {explorerOpen && <Explorer ref={explorerRef} doc={doc} peers={peers} activePath={active} readOnly={editorReadOnly} onOpen={open} />}
         <div className="ws-main">

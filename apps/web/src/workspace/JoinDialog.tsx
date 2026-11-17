@@ -17,7 +17,7 @@ export function JoinDialog({ onJoined, onClose }: { onJoined: () => void; onClos
       await joinAsGuest(name);
       onJoined();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not join');
+      setError(err instanceof Error ? err.message : 'Could not join, try again');
       setBusy(false);
     }
   }
@@ -25,9 +25,10 @@ export function JoinDialog({ onJoined, onClose }: { onJoined: () => void; onClos
   return (
     <Dialog title="Join Webcode" onClose={onClose ?? (() => {})}>
       <form onSubmit={submit} className="stack">
+        <p className="muted">Join this project as a guest, or sign in to keep your work.</p>
         <label className="field">
           <span>Your name</span>
-          <input className="input" value={name} maxLength={40} autoFocus onChange={(e) => setName(e.target.value)} />
+          <input className="input" aria-label="Your name" value={name} maxLength={40} autoFocus onChange={(e) => setName(e.target.value)} />
         </label>
         {error && <p className="error-text">{error}</p>}
         <div className="row-end">
