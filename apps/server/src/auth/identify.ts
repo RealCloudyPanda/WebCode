@@ -60,3 +60,12 @@ export async function identify(c: Context, deps: { sql: Sql; config: Config }): 
   }
   return id
 }
+
+/** For the WebSocket upgrade: resolves the viewer from a raw `Cookie` header. Never sets cookies. */
+export async function viewerFromCookieHeader(
+  header: string | undefined, deps: { sql: Sql; config: Config },
+): Promise<{ viewer: Viewer; displayName: string; userId?: string }> {
+  const { viewer, user, guest } = await identifyFromCookies(readCookies(header), deps)
+  if (user) return { viewer, displayName: user.name || user.login, userId: user.id }
+  return { viewer, displayName: guest?.name ?? '' }
+}

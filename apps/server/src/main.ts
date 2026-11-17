@@ -5,7 +5,7 @@ import { loadConfig } from './config.js'
 import { createDb } from './db/db.js'
 import { migrate } from './db/migrate.js'
 import { createApp } from './http/app.js'
-import { createNoopCollab } from './collab/types.js'
+import { createCollab } from './collab/hub.js'
 import { createGithubClient } from './auth/github.js'
 import { RateLimiter } from './util/rate-limit.js'
 
@@ -14,7 +14,7 @@ const sql = createDb(config.databaseUrl)
 await migrate(sql)
 
 const github = createGithubClient(config)
-const collab = createNoopCollab()
+const collab = createCollab({ sql, config })
 const app = createApp({ sql, config, github, collab, limiter: new RateLimiter() })
 
 const server = serve({ fetch: app.fetch, port: config.port }, info => {
@@ -30,8 +30,10 @@ let closing = false
 async function shutdown() {
   if (closing) return
   closing = true
-  await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections?.() })
+  const closed = new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections?.() })
+  // Upgraded WebSockets keep server.close() pending, so close them (and flush docs) first.
   await collab.destroy()
+  await closed
   await sql.end()
   process.exit(0)
 }
