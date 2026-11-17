@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { setCookie } from 'hono/cookie'
 import type { Viewer } from '@webcode/shared'
 import type { Config } from '../config.js'
 import type { Sql } from '../db/db.js'
@@ -9,6 +10,14 @@ import { verifyGuest, type Guest } from './guest.js'
 export const SESSION_COOKIE = 'wc_session'
 export const GUEST_COOKIE = 'wc_guest'
 export const OAUTH_STATE_COOKIE = 'wc_oauth_state'
+
+export const SESSION_MAX_AGE = 30 * 24 * 60 * 60
+
+export function cookieOpts(config: Config, maxAge: number) {
+  const { origin } = new URL(config.publicUrl)
+  const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+  return { httpOnly: true, secure: !local, sameSite: 'Lax' as const, path: '/', maxAge }
+}
 
 export type Identity = { viewer: Viewer; user: User | null; guest: Guest | null }
 
@@ -42,6 +51,12 @@ export async function identifyFromCookies(
   return { viewer: { kind: 'anonymous' }, user: null, guest: null }
 }
 
-export function identify(c: Context, deps: { sql: Sql; config: Config }): Promise<Identity> {
-  return identifyFromCookies(readCookies(c.req.header('cookie')), deps)
+/** Resolves the viewer; a valid session also gets its cookie's 30-day Max-Age renewed (once per request). */
+export async function identify(c: Context, deps: { sql: Sql; config: Config }): Promise<Identity> {
+  const cookies = readCookies(c.req.header('cookie'))
+  const id = await identifyFromCookies(cookies, deps)
+  if (id.user && cookies[SESSION_COOKIE]) {
+    setCookie(c, SESSION_COOKIE, cookies[SESSION_COOKIE], cookieOpts(deps.config, SESSION_MAX_AGE))
+  }
+  return id
 }

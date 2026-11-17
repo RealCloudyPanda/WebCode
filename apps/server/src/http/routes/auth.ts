@@ -4,11 +4,10 @@ import { deleteCookie, setCookie } from 'hono/cookie'
 import { newToken } from '@webcode/shared'
 import type { Deps } from '../app.js'
 import { signGuest, signValue, verifyGuest, verifyValue } from '../../auth/guest.js'
-import { GUEST_COOKIE, OAUTH_STATE_COOKIE, SESSION_COOKIE, identify, readCookies } from '../../auth/identify.js'
+import { GUEST_COOKIE, OAUTH_STATE_COOKIE, SESSION_COOKIE, SESSION_MAX_AGE, cookieOpts, identify, readCookies } from '../../auth/identify.js'
 import { createSession, deleteSession } from '../../db/sessions.js'
 import { upsertGithubUser } from '../../db/users.js'
 
-const SESSION_MAX_AGE = 30 * 24 * 60 * 60
 const GUEST_MAX_AGE = 365 * 24 * 60 * 60
 
 /** Only same-origin relative paths: a single leading `/`, no `//`, no backslashes, no control chars. */
@@ -17,13 +16,6 @@ export function safeNext(raw: string | undefined | null): string | null {
   if (!raw.startsWith('/') || raw.startsWith('//')) return null
   if (/[\\\u0000-\u001f\u007f]/.test(raw)) return null
   return raw
-}
-
-function cookieOpts(deps: Deps, maxAge: number) {
-  const { origin } = new URL(deps.config.publicUrl)
-  const local = origin === 'http://localhost' || origin === 'http://127.0.0.1' ||
-    /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)
-  return { httpOnly: true, secure: !local, sameSite: 'Lax' as const, path: '/', maxAge }
 }
 
 async function readBody(c: Context): Promise<Record<string, unknown>> {
@@ -40,7 +32,7 @@ export function authRoutes(deps: Deps): Hono {
   app.get('/auth/github', c => {
     const state = newToken(24)
     const next = safeNext(c.req.query('next'))
-    setCookie(c, OAUTH_STATE_COOKIE, signValue({ state, next }, config.sessionSecret), cookieOpts(deps, 600))
+    setCookie(c, OAUTH_STATE_COOKIE, signValue({ state, next }, config.sessionSecret), cookieOpts(deps.config, 600))
     return c.redirect(deps.github.authorizeUrl(state), 302)
   })
 
@@ -49,20 +41,22 @@ export function authRoutes(deps: Deps): Hono {
     const st = cookies[OAUTH_STATE_COOKIE] ? verifyValue(cookies[OAUTH_STATE_COOKIE], config.sessionSecret) as { state?: string; next?: unknown } | null : null
     const state = c.req.query('state')
     const code = c.req.query('code')
-    if (!st || typeof st.state !== 'string' || !state || st.state !== state || !code) {
+    if (!st || typeof st.state !== 'string' || !state || st.state !== state) {
       return c.json({ error: 'bad-state' }, 400)
     }
-    const next = typeof st.next === 'string' ? safeNext(st.next) : null
     deleteCookie(c, OAUTH_STATE_COOKIE, { path: '/' })
+    if (c.req.query('error') || !code) return c.redirect('/?signin=failed', 302)
+    const next = typeof st.next === 'string' ? safeNext(st.next) : null
     let user
     try {
       const token = await deps.github.exchangeCode(code)
       user = await upsertGithubUser(sql, await deps.github.getUser(token))
-    } catch {
+    } catch (err) {
+      console.error('[auth] GitHub sign-in failed:', err instanceof Error ? err.message : 'unknown error')
       return c.redirect('/?signin=failed', 302)
     }
     const session = await createSession(sql, user.id)
-    setCookie(c, SESSION_COOKIE, session.id, cookieOpts(deps, SESSION_MAX_AGE))
+    setCookie(c, SESSION_COOKIE, session.id, cookieOpts(deps.config, SESSION_MAX_AGE))
     const raw = cookies[GUEST_COOKIE]
     const guest = raw ? verifyGuest(raw, config.sessionSecret) : null
     await deps.onSignedIn?.({ userId: user.id, guest, next })
@@ -83,7 +77,7 @@ export function authRoutes(deps: Deps): Hono {
     const githubId = -(createHash('sha256').update(`webcode-test:${login}`).digest().readUIntBE(0, 6) + 1)
     const user = await upsertGithubUser(sql, { githubId, login, name: login, avatarUrl: '' })
     const session = await createSession(sql, user.id)
-    setCookie(c, SESSION_COOKIE, session.id, cookieOpts(deps, SESSION_MAX_AGE))
+    setCookie(c, SESSION_COOKIE, session.id, cookieOpts(deps.config, SESSION_MAX_AGE))
     return c.body(null, 204)
   })
 
@@ -94,7 +88,7 @@ export function authRoutes(deps: Deps): Hono {
     const existing = readCookies(c.req.header('cookie'))[GUEST_COOKIE]
     const prior = existing ? verifyGuest(existing, config.sessionSecret) : null
     const guest = { guestId: prior?.guestId ?? newToken(16), name: trimmed }
-    setCookie(c, GUEST_COOKIE, signGuest(guest, config.sessionSecret), cookieOpts(deps, GUEST_MAX_AGE))
+    setCookie(c, GUEST_COOKIE, signGuest(guest, config.sessionSecret), cookieOpts(deps.config, GUEST_MAX_AGE))
     return c.json({ guest })
   })
 

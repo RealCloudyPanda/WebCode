@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import type { Sql } from 'postgres'
 import type { Hono } from 'hono'
 import { dbSkipReason, setupTestDb, TEST_DB_URL } from '../../../test/db-helpers'
@@ -122,14 +122,38 @@ describe.skipIf(!TEST_DB_URL)(`auth routes (${TEST_DB_URL ? 'postgres' : dbSkipR
     expect((await get(app, `/auth/github/callback?code=c&state=${state}`, { wc_oauth_state: forged })).status).toBe(400)
   })
 
+  test('GitHub cancel (error=access_denied) redirects to /?signin=failed and clears state', async () => {
+    const start = await get(app, '/auth/github')
+    const state = new URL(start.headers.get('location')!).searchParams.get('state')!
+    const r = await get(app, `/auth/github/callback?error=access_denied&state=${state}`, { wc_oauth_state: jar(start).wc_oauth_state! })
+    expect(r.status).toBe(302)
+    expect(r.headers.get('location')).toBe('/?signin=failed')
+    expect(r.headers.getSetCookie().find(s => s.startsWith('wc_oauth_state='))).toMatch(/Max-Age=0|Expires=Thu, 01 Jan 1970/i)
+    expect(jar(r).wc_session).toBeUndefined()
+    // bad state still 400 even with error param
+    expect((await get(app, '/auth/github/callback?error=access_denied&state=zzz', { wc_oauth_state: jar(start).wc_oauth_state! })).status).toBe(400)
+  })
+
+  test('authenticated request refreshes the session cookie', async () => {
+    const { cookies } = await signIn(app, 'octo')
+    const r = await get(app, '/api/me', { wc_session: cookies.wc_session! })
+    const raw = r.headers.getSetCookie().filter(s => s.startsWith('wc_session='))
+    expect(raw).toHaveLength(1)
+    expect(raw[0]).toMatch(/Max-Age=2592000/); expect(raw[0]).toMatch(/HttpOnly/i)
+    const anon = await get(app, '/api/me', { wc_session: 'nope' })
+    expect(anon.headers.getSetCookie().some(s => s.startsWith('wc_session='))).toBe(false)
+  })
+
   test('github failure redirects to /?signin=failed', async () => {
     ghFail = true
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const { res } = await signIn(app, 'octo')
       expect(res.status).toBe(302)
       expect(res.headers.get('location')).toBe('/?signin=failed')
       expect(jar(res).wc_session).toBeUndefined()
-    } finally { ghFail = false }
+      expect(spy).toHaveBeenCalledWith('[auth] GitHub sign-in failed:', 'boom')
+    } finally { ghFail = false; spy.mockRestore() }
   })
 
   test('callback passes verified guest and next to onSignedIn', async () => {
