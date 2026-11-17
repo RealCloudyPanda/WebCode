@@ -157,4 +157,22 @@ describe('useProject', () => {
       offline: 'Offline – changes will sync when you reconnect',
     });
   });
+
+  test('a project switch never renders the previous connection', () => {
+    const seen: { id: string; provider: unknown; role: unknown }[] = [];
+    const { rerender } = renderHook(
+      ({ id }) => {
+        const c = useProject(id);
+        seen.push({ id, provider: c.provider, role: c.role });
+        return c;
+      },
+      { initialProps: { id: 'p1' } },
+    );
+    const first = last();
+    fire(() => first.config.onStateless!({ payload: JSON.stringify({ type: 'role', role: 'owner', readOnly: false }) } as any));
+    seen.length = 0;
+    rerender({ id: 'p2' });
+    const stale = seen.filter((r) => r.id === 'p2' && (r.provider === first || r.role === 'owner'));
+    expect(stale).toEqual([]);
+  });
 });

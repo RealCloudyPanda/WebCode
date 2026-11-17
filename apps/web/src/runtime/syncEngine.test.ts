@@ -176,6 +176,13 @@ describe('fs → doc', () => {
     expect(getDirs(doc).has('src/empty')).toBe(false);
   });
 
+  test('a folder renamed on disk moves its files in the doc', async () => {
+    const { doc, fs } = await setup({ files: { 'src/a.ts': 'x', 'src/deep/b.ts': 'y', 'keep.ts': 'k' } });
+    fs.externalRename('src', 'lib');
+    await flush();
+    expect(docToFiles(doc)).toEqual({ 'lib/a.ts': 'x', 'lib/deep/b.ts': 'y', 'keep.ts': 'k' });
+  });
+
   test('viewer (canWriteBack false) keeps changes local', async () => {
     const { doc, fs } = await setup({ canWriteBack: () => false });
     fs.externalWrite('src/a.ts', 'local');

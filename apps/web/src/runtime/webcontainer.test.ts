@@ -51,6 +51,7 @@ describe('webcontainerFs', () => {
     let listener!: (event: string, filename: string | Uint8Array) => void;
     const close = vi.fn();
     const wc = {
+      workdir: '/home/project',
       fs: {
         watch: vi.fn((_p: string, _o: unknown, l: typeof listener) => {
           listener = l;
@@ -63,8 +64,28 @@ describe('webcontainerFs', () => {
     expect(wc.fs.watch).toHaveBeenCalledWith('.', { recursive: true }, expect.any(Function));
     listener('change', 'src/a.ts');
     listener('rename', new TextEncoder().encode('b.ts'));
-    expect(seen).toEqual(['src/a.ts', 'b.ts']);
+    listener('rename', '/home/project/lib/c.ts');
+    expect(seen).toEqual(['src/a.ts', 'b.ts', 'lib/c.ts']);
     unwatch();
     expect(close).toHaveBeenCalled();
+  });
+});
+
+describe('watcher paths and workdir', () => {
+  test('stripWorkdir removes the workdir or a leading slash', async () => {
+    const { stripWorkdir } = await load();
+    expect(stripWorkdir('/home/project/src/a.ts', '/home/project')).toBe('src/a.ts');
+    expect(stripWorkdir('/src/a.ts', '/home/project')).toBe('src/a.ts');
+    expect(stripWorkdir('src/a.ts', '/home/project')).toBe('src/a.ts');
+  });
+
+  test('clearWorkdir removes every entry', async () => {
+    const { clearWorkdir } = await load();
+    const { MemoryFs } = await import('./memoryFs');
+    const fs = new MemoryFs();
+    fs.externalWrite('a.ts', '1');
+    fs.externalWrite('node_modules/x/i.js', '2');
+    await clearWorkdir(fs);
+    expect(await fs.snapshot()).toEqual({});
   });
 });

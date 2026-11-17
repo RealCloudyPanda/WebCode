@@ -1,5 +1,5 @@
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 import type { Role } from '@webcode/shared';
@@ -29,6 +29,7 @@ export type ProjectConnection = {
 };
 
 type State = Omit<ProjectConnection, 'doc'>;
+type Keyed = { projectId: string; state: State };
 
 const INITIAL: State = {
   provider: null,
@@ -77,10 +78,21 @@ function collabUrl(): string {
 /** Opens the project's shared Yjs document over Hocuspocus and tracks its connection state. */
 export function useProject(projectId: string): ProjectConnection {
   const doc = useMemo(() => new Y.Doc(), [projectId]);
-  const [state, setState] = useState<State>(INITIAL);
+  const [keyed, setKeyed] = useState<Keyed>({ projectId, state: INITIAL });
+  // State belongs to one project; until the new project's effect runs, show a fresh connecting state.
+  const state = keyed.projectId === projectId ? keyed.state : INITIAL;
+  const setState = (update: (s: State) => State) =>
+    setKeyed((k) => (k.projectId === projectId ? { projectId, state: update(k.state) } : k));
+
+  // Free the previous project's document once a new one has taken over.
+  const lastDoc = useRef(doc);
+  useEffect(() => {
+    if (lastDoc.current !== doc) lastDoc.current.destroy();
+    lastDoc.current = doc;
+  }, [doc]);
 
   useEffect(() => {
-    setState(INITIAL);
+    setKeyed({ projectId, state: INITIAL });
     let stopped = false;
     let everSynced = false;
     let live = false;

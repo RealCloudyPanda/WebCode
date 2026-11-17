@@ -50,6 +50,15 @@ export class MemoryFs implements FsLike {
     this.makeDirs(path);
   }
 
+  async readdir(path: string): Promise<{ name: string; isDir: boolean }[]> {
+    if (!this.dirs.has(path)) throw fsError(this.files.has(path) ? 'ENOTDIR' : 'ENOENT', path);
+    const out = new Map<string, boolean>();
+    const prefix = path ? path + '/' : '';
+    for (const p of this.files.keys()) if (p.startsWith(prefix)) out.set(p.slice(prefix.length).split('/')[0]!, p.slice(prefix.length).includes('/'));
+    for (const d of this.dirs) if (d !== '' && d.startsWith(prefix)) out.set(d.slice(prefix.length).split('/')[0]!, true);
+    return [...out].map(([name, isDir]) => ({ name, isDir }));
+  }
+
   watch(onChange: (path: string) => void): () => void {
     this.listeners.add(onChange);
     return () => this.listeners.delete(onChange);
@@ -66,6 +75,25 @@ export class MemoryFs implements FsLike {
   externalRm(path: string): void {
     if (!this.files.delete(path)) this.removeTree(path);
     this.emit(path);
+  }
+
+  /** Simulates `mv from to`: reports both the old and the new path. */
+  externalRename(from: string, to: string): void {
+    this.makeDirs(parentOf(to));
+    for (const [p, b] of [...this.files]) {
+      if (p === from || under(p, from)) {
+        this.files.delete(p);
+        this.files.set(to + p.slice(from.length), b);
+      }
+    }
+    for (const d of [...this.dirs]) {
+      if (d === from || under(d, from)) {
+        this.dirs.delete(d);
+        this.dirs.add(to + d.slice(from.length));
+      }
+    }
+    this.emit(from);
+    this.emit(to);
   }
 
   async text(path: string): Promise<string | undefined> {

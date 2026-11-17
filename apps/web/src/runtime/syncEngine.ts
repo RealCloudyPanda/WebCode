@@ -5,8 +5,9 @@ import { getDirs, getFiles, isIgnoredPath, isLockfile, isProbablyBinary, LIMITS,
 export interface FsLike {
   writeFile(path: string, data: string): Promise<void>;
   readFile(path: string): Promise<Uint8Array>;
-  rm(path: string, opts?: { recursive?: boolean }): Promise<void>;
+  rm(path: string, opts?: { recursive?: boolean; force?: boolean }): Promise<void>;
   mkdir(path: string, opts: { recursive: true }): Promise<void>;
+  readdir(path: string): Promise<{ name: string; isDir: boolean }[]>;
   watch(onChange: (path: string) => void): () => void;
 }
 
@@ -185,7 +186,11 @@ export class SyncEngine {
 
   private async reconcile(path: string): Promise<void> {
     const disk = await this.readDisk(path);
-    if (this.stopped || disk.kind === 'dir' || disk.kind === 'unreadable') return;
+    if (this.stopped || disk.kind === 'unreadable') return;
+    if (disk.kind === 'dir') {
+      await this.scanDir(path);
+      return;
+    }
     const files = getFiles(this.doc);
     const base = this.lastWritten.get(path);
     const writeBack = this.canWriteBack();
@@ -245,6 +250,27 @@ export class SyncEngine {
         applyRebased(t, base, disk.text, current);
       }
     }, this);
+  }
+
+  /** A folder appeared on disk (created or renamed in): pick up everything inside it. */
+  private async scanDir(dir: string): Promise<void> {
+    let entries: { name: string; isDir: boolean }[];
+    try {
+      entries = await this.fs.readdir(dir);
+    } catch {
+      return;
+    }
+    if (this.stopped) return;
+    if (entries.length === 0 && this.canWriteBack()) {
+      const dirs = getDirs(this.doc);
+      if (!dirs.has(dir)) this.doc.transact(() => dirs.set(dir, true), this);
+    }
+    for (const e of entries) {
+      const child = `${dir}/${e.name}`;
+      if (isIgnoredPath(child)) continue;
+      if (e.isDir) await this.scanDir(child);
+      else this.schedule(child);
+    }
   }
 
   /** A path that is neither a known file nor on disk: maybe a folder removed on disk. */
