@@ -44,6 +44,9 @@ importers:
       tar-stream:
         specifier: ^3.2.2
         version: 3.2.2(bare-buffer@3.7.2)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
       ws:
         specifier: ^8.23.0
         version: 8.23.0
@@ -63,9 +66,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.2
         version: 8.18.2
-      tsx:
-        specifier: ^4.19.2
-        version: 4.23.15
 
   apps/web:
     dependencies:
