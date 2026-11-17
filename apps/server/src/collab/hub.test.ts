@@ -12,7 +12,7 @@ import { signGuest } from '../auth/guest.js'
 import { viewerFromCookieHeader } from '../auth/identify.js'
 import { createSession } from '../db/sessions.js'
 import { upsertGithubUser } from '../db/users.js'
-import { getProject, setLinkAccess } from '../db/projects.js'
+import { deleteProject, getProject, setLinkAccess } from '../db/projects.js'
 import { loadDoc } from '../db/docs.js'
 import { createProjectFromFiles } from '../projects/create.js'
 import { createCollab, type CollabLimits } from './hub.js'
@@ -21,7 +21,7 @@ import type { CollabHub } from './types.js'
 const SECRET = 'test-secret'
 const config = loadConfig({ PUBLIC_URL: 'http://localhost:5173', SESSION_SECRET: SECRET })
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 async function waitFor(check: () => boolean | Promise<boolean>, timeout = 3000): Promise<void> {
   const end = Date.now() + timeout
   while (!(await check())) {
@@ -32,6 +32,18 @@ async function waitFor(check: () => boolean | Promise<boolean>, timeout = 3000):
 const settle = () => sleep(250)
 const role = (role: string, readOnly: boolean) => ({ type: 'role', role, readOnly })
 const roleMsgs = (c: { stateless: unknown[] }) => c.stateless.filter(m => (m as any).type === 'role')
+
+/** A Hocuspocus auth frame (varString docName, Auth=2, Token=0, varString token) for raw-socket tests. */
+const varUint = (n: number) => { const out: number[] = []; while (n > 127) { out.push((n & 127) | 128); n >>>= 7 } out.push(n); return out }
+const varString = (str: string) => { const b = Buffer.from(str); return [...varUint(b.length), ...b] }
+const authFrame = (docName: string) => new Uint8Array([...varString(docName), 2, 0, ...varString('')])
+
+/** A promise plus its resolver. */
+function gate() {
+  let open!: () => void
+  const opened = new Promise<void>(r => { open = r })
+  return { open, opened }
+}
 
 type Client = {
   doc: Y.Doc
@@ -47,6 +59,8 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
   let http: Server
   let url: string
   let clients: Client[] = []
+  /** Awaited inside onAuthenticate after the project read (the hub's test seam); null = no pause. */
+  let authPause: ((projectId: string) => Promise<void>) | null = null
 
   let n = 500
   const mkUser = async (login: string, name: string | null = login.toUpperCase()) => {
@@ -66,13 +80,14 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
     (await createProjectFromFiles({ sql }, { userId: alice.id }, files, { title: 'Proj', template: 'blank', linkAccess })).id
 
   const startHub = async (opts: { limits?: CollabLimits; debounce?: number; maxDebounce?: number } = {}) => {
-    hub = createCollab({ sql, config, ...opts })
+    hub = createCollab({ sql, config, ...opts, afterAuthProjectRead: async id => { await authPause?.(id) } })
     http = createServer((_req, res) => { res.statusCode = 404; res.end() })
     http.on('upgrade', (req, socket, head) => hub.handleUpgrade(req, socket, head))
     await new Promise<void>(r => http.listen(0, '127.0.0.1', r))
     url = `ws://127.0.0.1:${(http.address() as AddressInfo).port}/collab`
   }
   const stopHub = async () => {
+    authPause = null
     for (const c of clients) c.provider.destroy()
     clients = []
     await hub?.destroy()
@@ -80,7 +95,10 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
   }
 
   /** Connects a provider as `cookie`; resolves once synced, rejects with the auth-failure reason. */
-  const connect = (projectId: string, cookie: string): Promise<Client> => {
+  const connect = (projectId: string, cookie: string): Promise<Client> => open(projectId, cookie).ready
+
+  /** Starts connecting; `client` is usable at once, `ready` settles like connect(). */
+  const open = (projectId: string, cookie: string): { client: Client; ready: Promise<Client> } => {
     class CookieWebSocket extends WebSocket {
       constructor(address: string, protocols?: string | string[]) {
         super(address, protocols, { headers: cookie ? { cookie } : {} })
@@ -95,7 +113,8 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
       closes.push(event.code)
       closeWaiters.splice(0).forEach(w => w(event.code))
     })
-    return new Promise((resolve, reject) => {
+    let client!: Client
+    const ready = new Promise<Client>((resolve, reject) => {
       const provider = new HocuspocusProvider({
         name: projectId, document: doc, websocketProvider: socket,
         onSynced: () => resolve(client),
@@ -105,7 +124,7 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
       // The provider does not own a socket it was handed; destroy both together.
       const destroy = provider.destroy.bind(provider)
       provider.destroy = () => { destroy(); socket.destroy() }
-      const client: Client = {
+      client = {
         doc, provider, stateless,
         closedWith: () => closes.length
           ? Promise.resolve(closes[0]!)
@@ -114,6 +133,7 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
       clients.push(client)
       provider.attach()
     })
+    return { client, ready }
   }
   const text = (c: Client, path = 'src/a.ts') => docToFiles(c.doc)[path] ?? ''
 
@@ -317,6 +337,67 @@ describe.skipIf(!TEST_DB_URL)(`collab hub (${TEST_DB_URL ? 'postgres' : dbSkipRe
     await connect(id, g1)
     await expect(connect(id, g2)).rejects.toThrow('too-many')
     expect(hub.liveCount(id)).toBe(2)
+  })
+
+  test('sockets that close mid-authentication do not leak connection slots', async () => {
+    await startHub({ limits: { ...LIMITS, maxConnections: 2 } })
+    const id = await mkProject('editor')
+    authPause = () => sleep(100)
+    for (let i = 0; i < 4; i++) {
+      const ws = new WebSocket(url, { headers: { cookie: mkGuest(`raw${i}`) } })
+      await new Promise<void>((resolve, reject) => {
+        ws.on('open', () => { ws.send(authFrame(id)); ws.close() })
+        ws.on('close', () => resolve())
+        ws.on('error', reject)
+      })
+    }
+    await sleep(250) // let the paused onAuthenticate calls finish
+    authPause = null
+    await connect(id, alice.cookie)
+    await connect(id, g1)
+    expect(hub.liveCount(id)).toBe(2)
+  })
+
+  test('concurrent authentications admit exactly maxConnections', async () => {
+    await startHub({ limits: { ...LIMITS, maxConnections: 3 } })
+    const id = await mkProject('editor')
+    authPause = () => sleep(50)
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, (_, i) => connect(id, mkGuest(`c${i}`))))
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(3)
+    expect(results.filter(r => r.status === 'rejected').map(r => (r as PromiseRejectedResult).reason.message))
+      .toEqual(['too-many', 'too-many', 'too-many'])
+    expect(hub.liveCount(id)).toBe(3)
+  })
+
+  test('a connection mid-authentication when access is revoked is closed with 4403 once attached', async () => {
+    await startHub()
+    const id = await mkProject('editor')
+    const entered = gate(), resume = gate()
+    authPause = async () => { entered.open(); await resume.opened }
+    const { client, ready } = open(id, g1)
+    ready.catch(() => {})
+    await entered.opened
+    authPause = null
+    await setLinkAccess(sql, id, 'restricted'); await hub.reevaluateAccess(id) // nothing attached yet
+    resume.open()
+    expect(await client.closedWith()).toBe(4403)
+    expect(hub.liveCount(id)).toBe(0)
+  })
+
+  test('a connection mid-authentication when the project is deleted is closed with 4404 once attached', async () => {
+    await startHub()
+    const id = await mkProject('editor')
+    const entered = gate(), resume = gate()
+    authPause = async () => { entered.open(); await resume.opened }
+    const { client, ready } = open(id, g1)
+    ready.catch(() => {})
+    await entered.opened
+    authPause = null
+    hub.closeAll(id, 'deleted'); await deleteProject(sql, id)
+    resume.open()
+    expect(await client.closedWith()).toBe(4404)
+    expect(hub.liveCount(id)).toBe(0)
   })
 
   test('viewerFromCookieHeader resolves users, guests and anonymous', async () => {

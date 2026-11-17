@@ -34,6 +34,7 @@ const deny = (reason: Denial['reason']): Denial => ({ reason })
 
 const CLOSE_REVOKED = { code: 4403, reason: 'access-revoked' } as const
 const CLOSE_DELETED = { code: 4404, reason: 'deleted' } as const
+const DELETED_MEMORY_MS = 60_000
 
 const ctxOf = (c: Connection) => c.context as CollabContext
 const viewerKey = (v: Viewer) => (v.kind === 'user' ? v.userId : v.kind === 'guest' ? v.guestId : 'anonymous')
@@ -59,13 +60,17 @@ export function createCollab(deps: {
   limits?: CollabLimits
   debounce?: number
   maxDebounce?: number
+  /** Test seam: awaited in onAuthenticate right after the project row is read. */
+  afterAuthProjectRead?: (projectId: string) => Promise<void>
 }): CollabHub {
-  const { sql, config, limits = LIMITS, debounce = 2000, maxDebounce = 10000 } = deps
+  const { sql, config, limits = LIMITS, debounce = 2000, maxDebounce = 10000, afterAuthProjectRead } = deps
 
   /** Projects whose stored size or file count is over the limit: only the owner may edit. */
   const locked = new Set<string>()
-  /** Projects closed for deletion: their pending stores are dropped. */
+  /** Projects closed for deletion: their pending stores are dropped and late joiners are closed. */
   const deleted = new Set<string>()
+  /** Keys of sockets that are still open; a slot is only reserved for one of these. */
+  const openSockets = new Set<string>()
   /** Authenticated sockets not yet attached to the document, per project (counted against maxConnections). */
   const pending = new Map<string, Set<string>>()
 
@@ -134,15 +139,20 @@ export function createCollab(deps: {
     extensions: [database],
 
     async onAuthenticate({ documentName, requestHeaders, connectionConfig, context }) {
+      const { socketKey } = context as CollabContext
       const project = await getProject(sql, documentName)
-      if (!project) throw deny('not-found')
+      if (!project || deleted.has(documentName)) throw deny('not-found')
+      await afterAuthProjectRead?.(documentName)
       const who = await viewerFromCookieHeader(requestHeaders.get('cookie') ?? undefined, { sql, config })
       const role = resolveAccess(project, who.viewer)
       if (role === 'none') throw deny('no-access')
       if (who.viewer.kind === 'anonymous') throw deny('need-guest')
+      // The socket may have closed during the awaits above; its close handler has already released
+      // its reservations, so reserving now would leak the slot forever.
+      if (!openSockets.has(socketKey)) throw deny('no-access')
       const reserved = pending.get(documentName) ?? new Set<string>()
       if (connectionsOf(documentName).length + reserved.size >= limits.maxConnections) throw deny('too-many')
-      reserved.add((context as CollabContext).socketKey)
+      reserved.add(socketKey)
       pending.set(documentName, reserved)
       connectionConfig.readOnly = isReadOnly(documentName, role)
       const added: Omit<CollabContext, 'socketKey'> = {
@@ -159,16 +169,25 @@ export function createCollab(deps: {
     async connected({ documentName, connection }) {
       const ctx = ctxOf(connection)
       release(documentName, ctx.socketKey)
-      // The lock may have changed between authentication and attaching to the document.
+      if (deleted.has(documentName)) { kick(connection, CLOSE_DELETED); return }
+      // Starting role (the size lock may have changed since authentication).
       connection.readOnly = isReadOnly(documentName, ctx.role)
       sendRole(connection)
       if (locked.has(documentName)) connection.sendStateless(JSON.stringify({ type: 'size-locked' }))
+      // Access may have changed, or the project been deleted, after onAuthenticate read the project
+      // but before this connection was attached, i.e. after reevaluateAccess/closeAll looked at the
+      // room. Re-reading now that it is attached closes that gap: later changes will see it.
+      const project = await getProject(sql, documentName)
+      if (!connection.document.hasConnection(connection)) return // closed meanwhile
+      if (!project || deleted.has(documentName)) { kick(connection, CLOSE_DELETED); return }
+      const role = resolveAccess(project, ctx.viewer)
+      if (role === 'none') { kick(connection, CLOSE_REVOKED); return }
+      applyAccess(connection, role)
       await touchActive(sql, documentName)
     },
 
     async afterUnloadDocument({ documentName }) {
       locked.delete(documentName)
-      deleted.delete(documentName)
     },
   })
 
@@ -178,11 +197,13 @@ export function createCollab(deps: {
     handleUpgrade(req, socket: Duplex, head) {
       wss.handleUpgrade(req, socket, head, ws => {
         const socketKey = randomUUID()
+        openSockets.add(socketKey)
         const client = hocuspocus.handleConnection(ws, toRequest(req), { socketKey })
         ws.on('message', data => client.handleMessage(toBytes(data)))
         ws.on('pong', () => client.touch())
         ws.on('error', () => ws.terminate())
         ws.on('close', (code, reason) => {
+          openSockets.delete(socketKey)
           releaseSocket(socketKey)
           client.handleClose({ code, reason: reason.toString() })
         })
@@ -205,8 +226,10 @@ export function createCollab(deps: {
     },
 
     closeAll(projectId) {
-      if (!liveDoc(projectId)) return
+      // Kept for a while (not just until unload) so sockets still mid-auth are refused or closed
+      // even if the room unloads before they attach; the project row is gone by then.
       deleted.add(projectId)
+      setTimeout(() => deleted.delete(projectId), DELETED_MEMORY_MS).unref()
       for (const c of connectionsOf(projectId)) kick(c, CLOSE_DELETED)
     },
 
