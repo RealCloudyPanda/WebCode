@@ -41,7 +41,6 @@ Webcode is "Google Docs for coding". You open a real software project in the bro
 - A demo link that is broken, asleep, or slow to start when someone clicks it.
 - Anyone with a link being able to run code on Webcode's servers.
 - Looking like a Google clone: no Google name, logos, or product icons. The *layout and feel* follow Docs; the brand is Webcode's.
-- Claude or any AI showing up as a contributor on the GitHub repo (see §9).
 
 ## 3. Approaches considered
 
@@ -271,8 +270,7 @@ Where limits are checked *(builder-check call)*:
 
 ## 9. Repo conventions
 
-- Commits are authored by **RealCloudyPanda** only (`348705777+RealCloudyPanda@users.noreply.github.com`). No `Co-Authored-By: Claude` trailers and no "Generated with Claude Code" lines in commits or PR descriptions. A local `commit-msg` hook in the owner's clone enforces this; never bypass it with `--no-verify`.
-- `.superpowers/` (brainstorming mockups) is git-ignored.
+- Commits are authored by **RealCloudyPanda** only.
 - README explains what Webcode is, links the live demo, and shows a screenshot or GIF of two people editing.
 
 ## 10. Left to the builder
